@@ -15,5 +15,3 @@ KRONOS/
 |   ├── kronos_optimizer.cpp
 |   └── main.cpp
 └── third_party/ (Eigen)
-
-

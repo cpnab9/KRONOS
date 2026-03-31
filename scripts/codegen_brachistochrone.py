@@ -72,10 +72,21 @@ f = T
 lam = ca.SX.sym('lam', n_g)
 L = f + ca.dot(lam, g)
 
-# 计算导数信息（注意：这里使用了 ca.densify 强制转为稠密矩阵，方便第一步的 Eigen 接入）
+# 计算导数信息（修改：移除 ca.densify，保持稀疏矩阵格式）
 grad_L = ca.jacobian(L, w).T      
-H_L = ca.densify(ca.hessian(L, w)[0])         
-A_g = ca.densify(ca.jacobian(g, w))           
+H_L = ca.hessian(L, w)[0]         
+A_g = ca.jacobian(g, w)           
+
+# 提取稀疏结构 (CCS格式: 列指针和行索引)
+H_sparsity = H_L.sparsity()
+H_nnz = H_sparsity.nnz()
+H_colind = H_sparsity.colind()
+H_row = H_sparsity.row()
+
+A_sparsity = A_g.sparsity()
+A_nnz = A_sparsity.nnz()
+A_colind = A_sparsity.colind()
+A_row = A_sparsity.row()
 
 # 命名输入输出，便于 C++ 侧识别
 kkt_func = ca.Function('kkt_func', 
@@ -117,6 +128,20 @@ with open(config_file, 'w') as f:
     f.write(f"#define KRONOS_N_W {n_w}\n")
     f.write(f"#define KRONOS_N_G {n_g}\n\n")
     
+    # 添加稀疏矩阵的非零元素个数
+    f.write(f"#define KRONOS_H_NNZ {H_nnz}\n")
+    f.write(f"#define KRONOS_A_NNZ {A_nnz}\n\n")
+    
+    # 导出 H 的稀疏结构 (CCS)
+    f.write("// Sparsity pattern for Hessian (CCS format)\n")
+    f.write(f"static const int H_colind[{len(H_colind)}] = {{" + ", ".join(map(str, H_colind)) + "};\n")
+    f.write(f"static const int H_row[{len(H_row)}] = {{" + ", ".join(map(str, H_row)) + "};\n\n")
+    
+    # 导出 A 的稀疏结构 (CCS)
+    f.write("// Sparsity pattern for Jacobian (CCS format)\n")
+    f.write(f"static const int A_colind[{len(A_colind)}] = {{" + ", ".join(map(str, A_colind)) + "};\n")
+    f.write(f"static const int A_row[{len(A_row)}] = {{" + ", ".join(map(str, A_row)) + "};\n\n")
+
     f.write("// Initial guess for state variables (w)\n")
     f.write(f"static const double w_init[{n_w}] = {{\n")
     f.write("    " + ", ".join([f"{val:.15f}" for val in w_k]))
@@ -133,4 +158,6 @@ print(f"✅ 成功生成 KRONOS 配置文件至: {config_file}")
 print("=======================================")
 print(f"N_W (变量数): {n_w}")
 print(f"N_G (约束数): {n_g}")
+print(f"H_NNZ (海森矩阵非零元): {H_nnz}")
+print(f"A_NNZ (雅可比矩阵非零元): {A_nnz}")
 print("=======================================")

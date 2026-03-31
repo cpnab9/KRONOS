@@ -1,66 +1,80 @@
 #include "kronos_kkt_solver.hpp"
 #include <iostream>
+#include <vector>
+#include <Eigen/SparseLU> // 引入稀疏 LU 分解
 
 namespace kronos {
 
 SchurKktSolver::SchurKktSolver(double H_rho, double S_rho) 
     : H_rho_(H_rho), S_rho_(S_rho) {}
 
-bool SchurKktSolver::solve(const MatrixXd& H, const MatrixXd& A,
+bool SchurKktSolver::solve(const SparseMatrixXd& H, const SparseMatrixXd& A,
                            const VectorXd& grad_L, const VectorXd& g,
                            VectorXd& d_w, VectorXd& d_lam) {
     int nw = H.rows();
     int ng = A.rows();
+    int kkt_size = nw + ng;
 
-    // 1. 正则化 H (Inertia Correction)
-    MatrixXd H_reg = H;
-    H_reg.diagonal().array() += H_rho_;
+    // 1. 组装大型稀疏 KKT 矩阵 (Augmented System)
+    // K = [ H + H_rho*I    A^T    ]
+    //     [      A      -S_rho*I  ]
+    SparseMatrixXd K(kkt_size, kkt_size);
+    std::vector<Eigen::Triplet<double>> triplets;
     
-    // =========================================================
-    // 优化 1：彻底抛弃 .inverse()，改用极速且稳定的 LDLT 分解
-    // 非线性规划的海森矩阵可能是对称不定矩阵，LDLT 是最优解
-    // =========================================================
-    Eigen::LDLT<MatrixXd> ldlt_H(H_reg);
-    if (ldlt_H.info() != Eigen::Success) {
-        std::cerr << "[KRONOS Solver] Error: Hessian factorization failed! Try increasing H_rho." << std::endl;
+    // 预估非零元素数量以加速内存分配
+    triplets.reserve(H.nonZeros() + 2 * A.nonZeros() + nw + ng);
+
+    // 1.1 插入 H 的非零元素
+    for (int k = 0; k < H.outerSize(); ++k) {
+        for (SparseMatrixXd::InnerIterator it(H, k); it; ++it) {
+            triplets.emplace_back(it.row(), it.col(), it.value());
+        }
+    }
+    // 1.2 插入 H 的对角正则化 (Inertia Correction)
+    for (int i = 0; i < nw; ++i) {
+        triplets.emplace_back(i, i, H_rho_);
+    }
+
+    // 1.3 插入 A 和 A^T 的非零元素
+    for (int k = 0; k < A.outerSize(); ++k) {
+        for (SparseMatrixXd::InnerIterator it(A, k); it; ++it) {
+            triplets.emplace_back(nw + it.row(), it.col(), it.value()); // 左下角 A
+            triplets.emplace_back(it.col(), nw + it.row(), it.value()); // 右上角 A^T
+        }
+    }
+
+    // 1.4 插入右下角的对角正则化
+    for (int i = 0; i < ng; ++i) {
+        triplets.emplace_back(nw + i, nw + i, -S_rho_);
+    }
+
+    K.setFromTriplets(triplets.begin(), triplets.end());
+
+    // 2. 组装右侧向量 (RHS)
+    VectorXd rhs(kkt_size);
+    rhs.head(nw) = -grad_L;
+    rhs.tail(ng) = -g;
+
+    // 3. 求解线性系统
+    // 这里使用 Eigen::SparseLU 求解对称不定系统
+    Eigen::SparseLU<SparseMatrixXd> solver;
+    solver.analyzePattern(K);
+    solver.factorize(K);
+
+    if (solver.info() != Eigen::Success) {
+        std::cerr << "[KRONOS Solver] Error: KKT matrix factorization failed!" << std::endl;
         return false;
     }
 
-    // =========================================================
-    // 优化 2：计算 X = H_reg^{-1} * A^T 
-    // 让底层的分解器去解方程，而不是乘以逆矩阵
-    // =========================================================
-    MatrixXd X = ldlt_H.solve(A.transpose());
-    
-    // 2. 构造舒尔补系统 S = A * X
-    MatrixXd S(ng, ng);
-    // 优化 3：使用 .noalias() 阻止 Eigen 在堆栈上生成临时拷贝矩阵
-    S.noalias() = A * X;
-    S.diagonal().array() += S_rho_;
-    
-    // 3. 计算乘子步长的右侧 rhs_lam
-    // 同理，先解出 y = H_reg^{-1} * grad_L
-    VectorXd y = ldlt_H.solve(grad_L);
-    VectorXd rhs_lam = g - A * y;
-    
-    // =========================================================
-    // 优化 4：S 是对称的，抛弃偏主元 LU 分解，改用对称矩阵专用的分解
-    // =========================================================
-    Eigen::LDLT<MatrixXd> ldlt_S(S);
-    if (ldlt_S.info() != Eigen::Success) {
-        std::cerr << "[KRONOS Solver] Error: Schur complement factorization failed!" << std::endl;
+    VectorXd sol = solver.solve(rhs);
+    if (solver.info() != Eigen::Success) {
+        std::cerr << "[KRONOS Solver] Error: KKT system solve failed!" << std::endl;
         return false;
     }
-    d_lam = ldlt_S.solve(rhs_lam);
-    
-    // =========================================================
-    // 优化 5：数学魔法代换恢复状态步长 d_w
-    // 原公式：d_w = -H_inv * (grad_L + A^T * d_lam)
-    // 展开后：d_w = -H_inv * grad_L - H_inv * A^T * d_lam
-    // 代入前面的 y 和 X：d_w = -y - X * d_lam
-    // 结果：彻底省去了最后一次解线性方程组的步骤，变成纯粹的矩阵乘法！
-    // =========================================================
-    d_w.noalias() = -y - X * d_lam;
+
+    // 4. 提取步长
+    d_w = sol.head(nw);
+    d_lam = sol.tail(ng);
 
     return true;
 }

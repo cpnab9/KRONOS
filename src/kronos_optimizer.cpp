@@ -13,7 +13,8 @@ NewtonOptimizer::NewtonOptimizer(NlpWrapper& nlp, SchurKktSolver& kkt_solver)
 double NewtonOptimizer::compute_merit(const VectorXd& w, const VectorXd& lam, double merit_mu) {
     int nw = nlp_.get_nw();
     int ng = nlp_.get_ng();
-    MatrixXd H_dummy(nw, nw), A_dummy(ng, nw);
+    // 修改：替换为稀疏矩阵
+    SparseMatrixXd H_dummy(nw, nw), A_dummy(ng, nw);
     VectorXd grad_dummy(nw), g_cand(ng);
     
     nlp_.evaluate(w, lam, H_dummy, A_dummy, grad_dummy, g_cand);
@@ -24,7 +25,8 @@ bool NewtonOptimizer::optimize(VectorXd& w_k, VectorXd& lam_k) {
     int nw = nlp_.get_nw();
     int ng = nlp_.get_ng();
 
-    MatrixXd H_val(nw, nw), A_val(ng, nw);
+    // 修改：替换为稀疏矩阵
+    SparseMatrixXd H_val(nw, nw), A_val(ng, nw);
     VectorXd grad_L_val(nw), g_val(ng);
     VectorXd d_w(nw), d_lam(ng);
 
@@ -44,7 +46,7 @@ bool NewtonOptimizer::optimize(VectorXd& w_k, VectorXd& lam_k) {
             return true;
         }
         
-        // 2. 调用底层的舒尔补求解器，求解搜索方向
+        // 2. 调用底层的求解器
         kkt_solver_.solve(H_val, A_val, grad_L_val, g_val, d_w, d_lam);
         
         // 3. 线搜索 (Line Search)
