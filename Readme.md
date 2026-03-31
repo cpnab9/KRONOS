@@ -5,11 +5,15 @@ KRONOS/
 ├── CMakeLists.txt
 ├── generated/ (kkt_funcs.c, kkt_funcs.h, kronos_config.h)
 ├── include/
-│   ├── kronos_types.hpp          (基础类型定义)
-│   ├── kronos_nlp_wrapper.hpp    (NLP接口层)
-│   └── kronos_solver.hpp         (牛顿-舒尔补求解器)
+│   ├── kronos_types.hpp
+│   ├── kronos_nlp_wrapper.hpp
+│   ├── kronos_kkt_solver.hpp
+│   └── kronos_optimizer.hpp
 ├── src/
-│   ├── kronos_nlp_wrapper.cpp
-│   ├── kronos_solver.cpp
-│   └── main.cpp                  (极简主程序)
+|   ├── kronos_nlp_wrapper.cpp
+|   ├── kronos_kkt_solver.cpp
+|   ├── kronos_optimizer.cpp
+|   └── main.cpp
 └── third_party/ (Eigen)
+
+
