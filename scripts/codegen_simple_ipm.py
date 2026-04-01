@@ -52,11 +52,12 @@ Ag_nnz, Ag_colind, Ag_row = get_sparsity(A_g)
 Ah_nnz, Ah_colind, Ah_row = get_sparsity(A_h)
 
 # 命名输入输出，新增了 z (输入) 以及 A_h, h (输出)
+# 命名输入输出，新增了 z (输入) 以及 A_h, h (输出)
 kkt_func = ca.Function('kkt_func', 
                        [w, lam, z], 
-                       [H_L, A_g, grad_L, g, A_h, h], 
+                       [H_L, A_g, grad_L, g, A_h, h, f], 
                        ['w', 'lam', 'z'], 
-                       ['H', 'A_g', 'grad_L', 'g', 'A_h', 'h'])
+                       ['H', 'A_g', 'grad_L', 'g', 'A_h', 'h', 'f_obj'])
 
 # ================= 3. 初值构造 =================
 w_init = np.array([0.0, 0.0])

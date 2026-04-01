@@ -32,7 +32,8 @@ double NewtonOptimizer::compute_merit(const VectorXd& w, const VectorXd& s, doub
     int nw = nlp_.get_nw(), ng = nlp_.get_ng(), nh = nlp_.get_nh();
     SparseMatrixXd H_d(nw, nw), Ag_d(ng, nw), Ah_d(nh, nw);
     VectorXd grad_L(nw), g(ng), h(nh);
-    VectorXd lam_dummy(ng), z_dummy(nh);
+    VectorXd lam_dummy = VectorXd::Zero(ng);
+    VectorXd z_dummy = VectorXd::Zero(nh);
     double f_val = 0.0;
     
     nlp_.evaluate(w, lam_dummy, z_dummy, H_d, Ag_d, Ah_d, grad_L, g, h, f_val);
@@ -52,7 +53,8 @@ double NewtonOptimizer::compute_merit(const VectorXd& w, const VectorXd& s, doub
 
 bool NewtonOptimizer::optimize(VectorXd& w_k, VectorXd& lam_k) {
     int nw = nlp_.get_nw(), ng = nlp_.get_ng(), nh = nlp_.get_nh();
-    VectorXd s_k = VectorXd::Ones(nh), z_k = VectorXd::Ones(nh);
+    VectorXd s_k = nh > 0 ? VectorXd::Ones(nh) : VectorXd(0);
+    VectorXd z_k = nh > 0 ? VectorXd::Ones(nh) : VectorXd(0);
 
     SparseMatrixXd H_val(nw, nw), A_g_val(ng, nw), A_h_val(nh, nw);
     VectorXd grad_L_val(nw), g_val(ng), h_val(nh);
@@ -75,22 +77,13 @@ bool NewtonOptimizer::optimize(VectorXd& w_k, VectorXd& lam_k) {
             return true;
         }
         
-        // --- 矩阵缩聚 ---
-        SparseMatrixXd H_mod = H_val;
-        VectorXd grad_L_mod = grad_L_val;
-        VectorXd S_inv, Sigma;
-        if (nh > 0) {
-            S_inv = s_k.cwiseInverse();
-            Sigma = S_inv.cwiseProduct(z_k);
-            H_mod += SparseMatrixXd(A_h_val.transpose() * Sigma.asDiagonal() * A_h_val);
-            grad_L_mod += A_h_val.transpose() * (Sigma.cwiseProduct(h_val) - mu * S_inv);
-        }
+        // --- 直接调用底层扩展 KKT 求解，避免手动缩聚 ---
+        bool solve_success = kkt_solver_.solve(H_val, A_g_val, A_h_val, grad_L_val, g_val, h_val, 
+                                               s_k, z_k, mu, d_w, d_lam, d_z, d_s);
 
-        kkt_solver_.solve(H_mod, A_g_val, grad_L_mod, g_val, d_w, d_lam);
-        
-        if (nh > 0) {
-            d_s = A_h_val * d_w + h_val - s_k;
-            d_z = mu * S_inv - z_k - Sigma.cwiseProduct(d_s);
+        if (!solve_success) {
+            cout << "\n⚠️ Linear solver failed at iteration " << iter << "\n";
+            return false;
         }
 
         // --- 1. 计算最大允许步长 (Fraction-to-the-boundary) ---
@@ -113,14 +106,31 @@ bool NewtonOptimizer::optimize(VectorXd& w_k, VectorXd& lam_k) {
         double alpha_p = alpha_p_max;
         double phi_0 = compute_merit(w_k, s_k, mu, merit_nu);
         
+        // 【核心修复】：计算准确的 Merit 函数方向导数
+        double dir_deriv = 0.0;
+        VectorXd grad_f = grad_L_val;
+        if (ng > 0) grad_f -= A_g_val.transpose() * lam_k;
+        if (nh > 0) grad_f += A_h_val.transpose() * z_k;
+
+        dir_deriv += grad_f.dot(d_w);
+        if (nh > 0) {
+            VectorXd S_inv = s_k.cwiseInverse();
+            dir_deriv -= mu * S_inv.dot(d_s);
+        }
+        // 罚函数的方向导数部分，严格约束残差下降
+        if (ng > 0) dir_deriv -= merit_nu * g_val.cwiseAbs().sum();
+        if (nh > 0) dir_deriv -= merit_nu * (h_val - s_k).cwiseAbs().sum();
+
         while (alpha_p > 1e-4) {
             VectorXd w_next = w_k + alpha_p * d_w;
             VectorXd s_next = s_k;
             if (nh > 0) s_next += alpha_p * d_s;
             
             double phi_next = compute_merit(w_next, s_next, mu, merit_nu);
-            // Armijo 条件：允许极小的松弛，防止死锁
-            if (phi_next <= phi_0 + 1e-4 * alpha_p) break;
+            
+            // 修复的 Armijo 条件：引入了 dir_deriv
+            if (phi_next <= phi_0 + 1e-4 * alpha_p * dir_deriv) break;
+            
             alpha_p *= 0.5;
         }
         
