@@ -108,7 +108,6 @@ def path_constraints(W_k, X_k, k):
     cc.append((0.1, X_k[3], 20.0))
     return cc
 
-# 【修正】：将 discrete_dynamics 的定义提前到调用之前
 def discrete_dynamics(W_k, X_k, k):
     X_next, _ = colloc_fun(X_k, W_k)
     return X_next
@@ -164,8 +163,9 @@ for k in range(K-1):
     for j in range(d):
         W_guess.extend([-1.0]) 
     opti.set_initial(u[k], W_guess)
+
 # ==========================================
-# 7. 导出给 fatrop 的 C 代码 (精准对齐 C++ 工程结构)
+# 7. 导出给 fatrop 的 C 代码
 # ==========================================
 opti.solver('fatrop', {
     'structure_detection': 'manual', 
@@ -177,22 +177,25 @@ opti.solver('fatrop', {
     'fatrop.mu_init': 1e-1
 })
 
-# 获取当前 Python 脚本所在绝对目录 (offline_codegen)
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# 推导项目根目录下的 generated 文件夹路径
 generated_dir = os.path.join(current_dir, '..', 'generated')
-
-# 如果 generated 文件夹不存在，自动创建它
 os.makedirs(generated_dir, exist_ok=True)
-
-# 【核心修复】：切换当前 Python 进程的工作目录到 generated 文件夹
 os.chdir(generated_dir)
 
-# 现在只需传入纯文件名，避开 CasADi 的绝对路径解析错误
-# 无论什么问题，导出的 C 函数名统一为 "kronos_nlp"
 opti.to_function("kronos_nlp", [], [opti.f, opti.x]).generate('nlp_code.c', {"with_header": True})
 
-# 出于良好的脚本习惯，切回原来的工作目录
-os.chdir(current_dir)
+# 【新增】：生成 C++ 所需的元数据头文件
+with open('problem_metadata.h', 'w') as f:
+    f.write("#pragma once\n\n")
+    f.write(f"// 问题维度元数据\n")
+    f.write(f"#define KRONOS_N  {N}\n")
+    f.write(f"#define KRONOS_NX {n_x}\n")
+    f.write(f"#define KRONOS_NU {d*n_x + d*n_u} // 伪谱法下 u 包含配点状态\n")
+    f.write(f"#define KRONOS_D  {d}\n")
+    f.write(f"\n// 变量名列表（用于 CSV 表头）\n")
+    f.write('#define KRONOS_X_NAMES "x,y,v,tf"\n')
+    # 注意：伪谱法中 u 的含义较复杂，这里简化输出首个控制变量名
+    f.write('#define KRONOS_U_NAMES "theta_control"\n')
 
-print(f"✅ Code generation successful! Files automatically saved to: {generated_dir}")
+os.chdir(current_dir)
+print(f"✅ Code generation and metadata successful! Files saved to: {generated_dir}")

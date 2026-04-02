@@ -43,5 +43,5 @@ add_executable(kronos_solver
     src/main.cpp
     src/solver/fatrop_wrapper.cpp
 )
-target_include_directories(kronos_solver PRIVATE include)
+target_include_directories(kronos_solver PRIVATE include generated)
 target_link_libraries(kronos_solver PRIVATE fatrop::fatrop ${CMAKE_DL_LIBS})

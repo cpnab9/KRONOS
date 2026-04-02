@@ -34,9 +34,9 @@ d = 3       # Radau 多项式阶数
 N = 20      # 划分的区间数
 K = N + 1
 
-n_x = 8     # 状态量: [r, theta, phi, V, gamma, psi, sigma, tf] 
+n_x = 8     # 状态量: [r, theta, phi, V, gamma, psi, sigma, tf]
 # 控制量从 4 增加到 6，加入禁飞区的松弛变量
-n_u = 6     # 控制量: [u_rate, slack_Q, slack_q, slack_n, slack_NFZ1, slack_NFZ2] 
+n_u = 6     # 控制量: [u_rate, slack_Q, slack_q, slack_n, slack_NFZ1, slack_NFZ2]
 
 tau_root = cs.collocation_points(d, 'radau')
 tau = np.append(0, tau_root) 
@@ -299,5 +299,17 @@ os.chdir(generated_dir)
 print("[*] 开始生成带禁飞区的 KRONOS NLP C代码...")
 opti.to_function("kronos_nlp", [], [opti.f, opti.x]).generate('nlp_code.c', {"with_header": True})
 
+# 【新增】：生成用于 C++ 导出 CSV 的维度元数据
+with open('problem_metadata.h', 'w') as f:
+    f.write("#pragma once\n\n")
+    f.write("// CAV_H_NFZ 问题的维度元数据\n")
+    f.write(f"#define KRONOS_N  {N}\n")
+    f.write(f"#define KRONOS_NX {n_x}\n")
+    f.write(f"#define KRONOS_NU {d*n_x + d*n_u} // 伪谱法下 u 包含配点状态\n")
+    f.write(f"#define KRONOS_D  {d}\n\n")
+    f.write("// 变量名列表\n")
+    f.write('#define KRONOS_X_NAMES "r,theta,phi,V,gamma,psi,sigma,tf"\n')
+    f.write('#define KRONOS_U_NAMES "u_rate,slack_Q,slack_q,slack_n,slack_NFZ1,slack_NFZ2"\n')
+
 os.chdir(current_dir)
-print(f"✅ Code generation successful! Files automatically saved to: {generated_dir}")
+print(f"✅ Code generation and metadata successful! Files automatically saved to: {generated_dir}")
