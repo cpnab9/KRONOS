@@ -26,12 +26,12 @@ W_penalty = 100000.0
 W_NFZ = 4000.0   # 禁飞区软约束的惩罚权重
 
 # --- 新增：禁飞区参数 ---
-theta_NFZ1, phi_NFZ1, R_NFZ1 = 5.0 * np.pi / 180.0, 30.0 * np.pi / 180.0, 500000.0 / R0
-theta_NFZ2, phi_NFZ2, R_NFZ2 = 2.5 * np.pi / 180.0, 60.0 * np.pi / 180.0, 500000.0 / R0
+theta_NFZ1, phi_NFZ1, R_NFZ1 = 5.0 * np.pi / 180.0, 30.0 * np.pi / 180.0, 0.0 / R0
+theta_NFZ2, phi_NFZ2, R_NFZ2 = 2.5 * np.pi / 180.0, 60.0 * np.pi / 180.0, 0.0 / R0
 
 # --- KRONOS 配置 ---
 d = 3       # Radau 多项式阶数
-N = 20      # 划分的区间数
+N = 25      # 划分的区间数
 K = N + 1
 
 n_x = 8     # 状态量: [r, theta, phi, V, gamma, psi, sigma, tf]

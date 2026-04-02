@@ -64,9 +64,6 @@ The program will output the optimal descent time (tf) and the terminal state rea
 * **Solver Settings**: Modify `fatrop` tolerances and iterations in `offline_codegen/` scripts.
 * **Hardware Deployment**: The generated C code is self-contained (Zero-allocation mode), making it suitable for embedded flight computers.
 
-## 📄 License
-[Insert your license here, e.g., MIT]
-
 --- 
 
 ### 💡 Note on Custom Problems
