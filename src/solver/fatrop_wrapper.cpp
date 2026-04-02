@@ -3,9 +3,9 @@
 
 namespace kronos {
 
-FatropWrapper::FatropWrapper() {
+FatropWrapper::FatropWrapper(const CasadiSolverFunctions& funcs) : funcs_(funcs) {
     // 1. 获取模型所需的参数、结果、整型和浮点型工作空间的维度
-    kronos_nlp_work(&sz_arg_, &sz_res_, &sz_iw_, &sz_w_);
+    funcs_.work(&sz_arg_, &sz_res_, &sz_iw_, &sz_w_);
     
     // 2. 预分配内存 (在机载系统启动时完成)
     arg_.resize(sz_arg_, nullptr);
@@ -13,8 +13,8 @@ FatropWrapper::FatropWrapper() {
     iw_.resize(sz_iw_, 0);
     w_.resize(sz_w_, 0.0);
 
-    // 3. 获取输出解向量的大小 (即 Python 脚本中 opti.x 的总长度)
-    const casadi_int* sp = kronos_nlp_sparsity_out(0);
+    // 3. 获取输出解向量的大小
+    const casadi_int* sp = funcs_.sparsity_out(0);
     casadi_int nrow = sp[0]; 
     res_buffer_.resize(nrow, 0.0);
     
@@ -22,20 +22,24 @@ FatropWrapper::FatropWrapper() {
     res_[0] = res_buffer_.data();
 
     // 4. Checkout 线程本地内存
-    kronos_nlp_incref();
-    mem_ = kronos_nlp_checkout();
+    funcs_.incref();
+    mem_ = funcs_.checkout();
 }
 
 FatropWrapper::~FatropWrapper() {
     // 资源释放
-    kronos_nlp_release(mem_);
-    kronos_nlp_decref();
+    if (funcs_.release) {
+        funcs_.release(mem_);
+    }
+    if (funcs_.decref) {
+        funcs_.decref();
+    }
 }
 
 void FatropWrapper::solve() {
     // 执行求解
-    // 这里是对 fatrop 求解器的隐式调用
-    if (kronos_nlp(arg_.data(), res_.data(), iw_.data(), w_.data(), mem_)) {
+    // 现在是对任意传入的 CasADi 生成代码的通用调用
+    if (funcs_.eval(arg_.data(), res_.data(), iw_.data(), w_.data(), mem_)) {
         throw std::runtime_error("Fatrop solver returned an error during execution.");
     }
 }

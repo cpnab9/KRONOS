@@ -3,24 +3,42 @@
 #include <iomanip>
 #include "kronos/solver/fatrop_wrapper.hpp"
 
+// 引入自动生成的最速降线算例底层的 C 函数声明
+extern "C" {
+    #include "kronos_nlp_functions.h"
+}
+
 int main() {
     std::cout << "[KRONOS] Initializing Flight Trajectory Optimizer..." << std::endl;
     
     try {
-        kronos::FatropWrapper mpc_solver;
+        // ==========================================
+        // 【算例定义区】：配置最速降线问题的求解器函数
+        // ==========================================
+        kronos::CasadiSolverFunctions brachio_funcs;
+        brachio_funcs.work = kronos_nlp_work;
+        brachio_funcs.sparsity_out = kronos_nlp_sparsity_out;
+        brachio_funcs.incref = kronos_nlp_incref;
+        brachio_funcs.decref = kronos_nlp_decref;
+        brachio_funcs.checkout = kronos_nlp_checkout;
+        brachio_funcs.release = kronos_nlp_release;
+        brachio_funcs.eval = kronos_nlp;
+
+        // ==========================================
+        // 【求解器执行区】：实例化通用求解器并传入算例
+        // ==========================================
+        kronos::FatropWrapper mpc_solver(brachio_funcs);
         std::cout << "[KRONOS] Solver memory allocated successfully. Zero allocation mode active." << std::endl;
 
         std::cout << "[KRONOS] Launching fatrop solver for Brachistochrone problem..." << std::endl;
         mpc_solver.solve();
         std::cout << "[KRONOS] Optimization converged!" << std::endl;
 
-        // 获取最优解结果
+        // ==========================================
+        // 【结果解析区】：目前暂留在此处，后续可进一步封装
+        // ==========================================
         const auto& sol = mpc_solver.get_solution();
         
-        // ==========================================
-        // 【核心修复】：动态解析，不再硬编码 N！
-        // 数组的最后 4 个元素永远是终点状态: [x, y, v, tf]
-        // ==========================================
         if (sol.size() < 4) {
             throw std::runtime_error("Solution vector is too small!");
         }
