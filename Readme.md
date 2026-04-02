@@ -1,98 +1,52 @@
-# KRONOS: KKT Real-time Onboard Newton Optimization Solver
-
-**KRONOS** (named after the Greek god of time) is a high-performance C++ non-linear programming (NLP) solver specifically designed for embedded and real-time systems. It focuses on solving complex optimization problems with both equality and inequality constraints using a **Primal-Dual Interior Point Method (IPM)**.
-
----
-
-## 🚀 Key Features
-
-* **Full Interior Point Method**: Supports non-linear equality constraints $g(w)=0$ and inequality constraints $h(w) \ge 0$.
-* **Matrix Condensation**: Uses algebraic elimination to compress inequality constraints into the Hessian matrix, keeping the core KKT system dimension constant for maximum efficiency.
-* **Schur Complement Solver**: Features a high-performance linear system solver based on the Schur Complement.
-* **CasADi Integration**: Leverages CasADi's symbolic math and Automatic Differentiation (AD) to generate pre-compiled C code, eliminating runtime overhead for Jacobian and Hessian computations.
-* **Hybrid Line Search Strategy**: Combines an $L_1$ exact merit function with KKT residual descent criteria to ensure robust convergence for highly non-linear problems like the Brachistochrone.
-
----
-
-## 🛠️ Project Structure
-
-```text
 KRONOS/
-├── scripts/           # Python scripts: Define problems using CasADi and generate C code
-├── generated/         # Auto-generated C code and configs (kkt_funcs.c, kronos_config.h)
-├── include/           # Core algorithm headers
-│   ├── kronos_types.hpp       # Type definitions (Eigen wrappers)
-│   ├── kronos_nlp_wrapper.hpp # NLP interface wrapper
-│   ├── kronos_kkt_solver.hpp  # KKT linear system solver
-│   └── kronos_optimizer.hpp   # IPM optimizer logic
-├── src/               # Core algorithm implementation
-│   ├── kronos_nlp_wrapper.cpp
-│   ├── kronos_kkt_solver.cpp
-│   ├── kronos_optimizer.cpp
-│   └── main.cpp               # Entry point
-└── third_party/       # Third-party libraries (primarily Eigen)
-```
-
----
-
-## 📐 Mathematical Background
-
-KRONOS solves standard NLP problems of the form:
-
-$$\min_w f(w)$$
-$$\text{s.t.} \quad g(w) = 0, \quad h(w) \ge 0$$
-
-To handle inequalities, we introduce **barrier functions** and **slack variables** $s$:
-
-$$\min_{w, s} f(w) - \mu \sum \ln(s_i)$$
-$$\text{s.t.} \quad g(w) = 0, \quad h(w) - s = 0$$
-
-By utilizing **condensation** techniques in the KKT system, we process inequality constraints in real-time without increasing the primary system's dimensionality.
-
----
-
-## 💻 Quick Start
-
-### 1. Generate Problem Code
-Define your optimization problem in a Python script. For example, to generate code for the Brachistochrone problem:
-
-```bash
-# Run the script to generate C interfaces
-python3 scripts/codegen_brachistochrone.py
-```
-
-### 2. Build the Project
-The project uses CMake for building. Ensure you have a C++ compiler configured.
-
-```bash
-mkdir build && cd build
-cmake ..
-make
-```
-
-### 3. Run the Solver
-Execute the binary to observe the optimization iteration process:
-
-```bash
-./kronos
-```
-
----
-
-## 📊 Performance
-
-KRONOS utilizes a **Primal-Dual Step Splitting** strategy to effectively handle non-convex trajectory optimization problems.
-
-* **Convergence Criteria**: Uses the infinity norm of KKT conditions $\| \text{Res} \|_\infty < 10^{-5}$.
-* **Line Search**: Integrated backtracking method with Armijo conditions to automatically adapt to non-linear curvature.
-
----
-
-## 📚 Dependencies
-
-* **C++17** or higher.
-* **Eigen 3**: For matrix operations (included in `third_party`).
-* **CasADi (Python)**: Required only for the offline code generation phase.
-
----
-*"Guided by the God of Time, optimizing every millisecond."*
+├── CMakeLists.txt                 # 顶层 CMake 构建配置
+├── README.md                      # 项目说明文档
+├── config/                        # 配置文件目录 (YAML/JSON)
+│   ├── vehicle_params.yaml        # 飞行器气动、质量等物理参数
+│   └── solver_settings.yaml       # fatrop 求解器参数 (最大迭代次数, 容差等)
+│
+├── offline_codegen/               # 【离线阶段】CasADi Python 脚本
+│   ├── requirements.txt           # Python 依赖 (casadi, numpy等)
+│   ├── models/                    # 连续动力学模型定义
+│   │   ├── __init__.py
+│   │   └── aircraft_6dof.py       # 例如：6自由度飞行器模型
+│   ├── collocation/               # 伪谱法节点与权重计算工具
+│   │   └── pseudospectral_utils.py 
+│   └── generate_nlp_c_code.py     # 核心主脚本：导出 CasADi C 代码
+│
+├── generated/                     # 【自动生成】离线脚本生成的 C 代码存放地
+│   ├── CMakeLists.txt             # 将生成的代码编译为静态库
+│   ├── kronos_nlp_functions.c     # 包含目标、约束、Jacobian、Hessian的纯C代码
+│   └── kronos_nlp_functions.h     # 对应的头文件
+│
+├── include/                       # 【在线阶段】C++ 头文件
+│   └── kronos/
+│       ├── core/
+│       │   ├── kronos_types.hpp   # 基础数据类型与结构体定义
+│       │   └── config_parser.hpp  # 解析 config 目录下的参数
+│       ├── transcription/
+│       │   ├── mesh_provider.hpp  # 提供伪谱法的时间网格与微分矩阵
+│       │   └── pseudospectral_block.hpp # 处理单个伪谱段的变量映射
+│       ├── solver/
+│       │   └── fatrop_wrapper.hpp # 封装 fatrop 的调用逻辑与数据转换
+│       └── guidance/
+│           └── mpc_controller.hpp # 包含制导主循环、热启动逻辑的类
+│
+├── src/                           # 【在线阶段】C++ 源文件
+│   ├── core/
+│   │   └── config_parser.cpp
+│   ├── transcription/
+│   │   └── mesh_provider.cpp
+│   ├── solver/
+│   │   └── fatrop_wrapper.cpp     # 继承并实现 fatrop 接口，注入 generated 代码
+│   ├── guidance/
+│   │   └── mpc_controller.cpp
+│   └── main.cpp                   # 机载端/仿真端程序入口点
+│
+├── third_party/                   # 第三方依赖 (作为 git submodule 引入)
+│   └── fatrop/                    # 你提供的 fatrop 库放在这里
+│
+└── tests/                         # 单元测试与集成测试
+    ├── CMakeLists.txt
+    ├── test_mesh_generation.cpp
+    └── test_solver_convergence.cpp

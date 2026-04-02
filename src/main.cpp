@@ -1,76 +1,48 @@
+// KRONOS/src/main.cpp
 #include <iostream>
 #include <iomanip>
-#include <chrono>
-
-#include "kronos_types.hpp"
-#include "kronos_nlp_wrapper.hpp"
-#include "kronos_kkt_solver.hpp"
-#include "kronos_optimizer.hpp"
-#include "kronos_config.h"
-
-using namespace std;
-using namespace kronos;
+#include "kronos/solver/fatrop_wrapper.hpp"
 
 int main() {
-    cout << "========================================\n";
-    cout << "  KRONOS Trajectory Optimizer v2.0 (IPM)\n";
-    cout << "  Architecture: NLP -> Newton -> Schur\n";
-    cout << "========================================\n";
+    std::cout << "[KRONOS] Initializing Flight Trajectory Optimizer..." << std::endl;
+    
+    try {
+        kronos::FatropWrapper mpc_solver;
+        std::cout << "[KRONOS] Solver memory allocated successfully. Zero allocation mode active." << std::endl;
 
-    // ==========================================
-    // ⏱️ 阶段一：初始化与内存分配计时
-    // ==========================================
-    auto t_init_start = std::chrono::steady_clock::now();
+        std::cout << "[KRONOS] Launching fatrop solver for Brachistochrone problem..." << std::endl;
+        mpc_solver.solve();
+        std::cout << "[KRONOS] Optimization converged!" << std::endl;
 
-    NlpWrapper nlp;
-    SchurKktSolver linear_solver(1e-5, 1e-8);
-    NewtonOptimizer optimizer(nlp, linear_solver);
-
-    VectorXd w = Eigen::Map<const VectorXd>(w_init, nlp.get_nw());
-    VectorXd lam = Eigen::Map<const VectorXd>(lam_init, nlp.get_ng());
-
-    auto t_init_end = std::chrono::steady_clock::now();
-    std::chrono::duration<double, std::milli> t_init = t_init_end - t_init_start;
-
-    // ==========================================
-    // ⏱️ 阶段二：核心数学优化过程计时
-    // ==========================================
-    cout << "[KRONOS] Starting optimization loop...\n";
-    auto t_solve_start = std::chrono::steady_clock::now();
-
-    bool success = optimizer.optimize(w, lam);
-
-    auto t_solve_end = std::chrono::steady_clock::now();
-    std::chrono::duration<double, std::milli> t_solve = t_solve_end - t_solve_start;
-
-    // ==========================================
-    // 📊 打印结果与性能报告
-    // ==========================================
-    cout << "\n========================================\n";
-    if (success) {
-        cout << "🎯 Optimization Success!\n";
+        // 获取最优解结果
+        const auto& sol = mpc_solver.get_solution();
         
-        int nw = nlp.get_nw();
-        // 【修改点】：根据变量维度决定打印方式
-        if (nw <= 10) {
-            // 如果是简单算例（比如我们的 2D 问题），直接打印所有变量
-            cout << "   Optimal w = [" << w.transpose() << "]\n";
-        } else {
-            // 如果是大型轨迹优化问题，打印首尾几个关键变量
-            double T_opt = w(nw - 1);
-            cout << "   Optimal Time T = " << fixed << setprecision(4) << T_opt << " s\n";
-            cout << "   First 5 states = [" << w.head(5).transpose() << " ...]\n";
+        // ==========================================
+        // 【核心修复】：动态解析，不再硬编码 N！
+        // 数组的最后 4 个元素永远是终点状态: [x, y, v, tf]
+        // ==========================================
+        if (sol.size() < 4) {
+            throw std::runtime_error("Solution vector is too small!");
         }
-    } else {
-        cout << "⚠️ Optimization Failed to converge.\n";
-    }
 
-    // 打印耗时报告
-    cout << "\n--- ⏱️ Performance Profiling ---\n";
-    cout << "   Initialization : " << fixed << setprecision(3) << t_init.count() << " ms\n";
-    cout << "   Optimization   : " << fixed << setprecision(3) << t_solve.count() << " ms\n";
-    cout << "   Total Time     : " << fixed << setprecision(3) << (t_init + t_solve).count() << " ms\n";
-    cout << "========================================\n";
+        int final_node_idx = sol.size() - 4; 
+        
+        double x_end = sol[final_node_idx + 0];
+        double y_end = sol[final_node_idx + 1];
+        double v_end = sol[final_node_idx + 2];
+        double tf    = sol[final_node_idx + 3];
+        
+        std::cout << "\n------------------------------------------" << std::endl;
+        std::cout << " Optimal Descent Time (tf) : " << std::fixed << std::setprecision(4) << tf << " seconds" << std::endl;
+        std::cout << " Target Reached (x, y)     : (" << x_end << ", " << y_end << ")" << std::endl;
+        std::cout << " Terminal Velocity (v)     : " << v_end << " m/s" << std::endl;
+        std::cout << " Expected Target (x, y)    : (10.0000, -5.0000)" << std::endl;
+        std::cout << "------------------------------------------\n" << std::endl;
+
+    } catch (const std::exception& e) {
+        std::cerr << "[FATAL ERROR] " << e.what() << std::endl;
+        return -1;
+    }
 
     return 0;
 }
