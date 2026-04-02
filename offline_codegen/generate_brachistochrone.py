@@ -189,7 +189,8 @@ os.makedirs(generated_dir, exist_ok=True)
 os.chdir(generated_dir)
 
 # 现在只需传入纯文件名，避开 CasADi 的绝对路径解析错误
-opti.to_function("kronos_nlp", [], [opti.x]).generate('kronos_nlp_functions.c', {"with_header": True})
+# 无论什么问题，导出的 C 函数名统一为 "kronos_nlp"
+opti.to_function("kronos_nlp", [], [opti.f, opti.x]).generate('nlp_code.c', {"with_header": True})
 
 # 出于良好的脚本习惯，切回原来的工作目录
 os.chdir(current_dir)

@@ -83,6 +83,7 @@ generated_dir = os.path.join(current_dir, '..', 'generated')
 os.makedirs(generated_dir, exist_ok=True)
 os.chdir(generated_dir)
 
-opti.to_function("constrained_nlp", [], [opti.x]).generate('constrained_nlp_functions.c', {"with_header": True})
+# 无论什么问题，导出的 C 函数名统一为 "kronos_nlp"
+opti.to_function("kronos_nlp", [], [opti.f, opti.x]).generate('nlp_code.c', {"with_header": True})
 os.chdir(current_dir)
 print(f"✅ Simple constrained problem code generation successful! Saved to: {generated_dir}")
