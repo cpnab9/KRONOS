@@ -36,46 +36,70 @@ int main(int argc, char* argv[]) {
         auto t_total_end = std::chrono::high_resolution_clock::now();
         double total_time_ms = std::chrono::duration<double, std::milli>(t_total_end - t_total_start).count();
 
-        // ----------------- 导出结果至 CSV -----------------
+        // ----------------- 导出结果至 CSV (优雅展平版) -----------------
         const std::vector<double>& solution = solver.get_solution(); 
         std::ofstream csv_file("optimization_results.csv");
 
         if (csv_file.is_open()) {
-            // 1. 写入表头 (包含展开后完整的 U 变量名)
+            // 1. 写入表头 (纯净的基础变量名)
             csv_file << "time," << KRONOS_X_NAMES << "," << KRONOS_U_NAMES << "\n";
 
-            // 2. 解析解向量并写入数据
-            // 解向量布局: [x0, u0, x1, u1, ..., xN]
             size_t ptr = 0;
-            
-            // 【核心修改 1】：使用 Python 传过来的宏动态提取 tf 的值
             double tf = solution[KRONOS_TF_INDEX]; 
+            double dt = tf / KRONOS_N; // 每个主区间的时间跨度
+            const std::vector<double> tau = KRONOS_TAU_ROOT;
 
-            for (int k = 0; k <= KRONOS_N; ++k) {
-                // 当前阶段的时间戳
-                double current_time = (static_cast<double>(k) / KRONOS_N) * tf;
-                csv_file << current_time;
+            // 读取第 0 帧主节点状态 (t = 0)
+            std::vector<double> x_val(KRONOS_NX);
+            for (int i = 0; i < KRONOS_NX; ++i) {
+                x_val[i] = solution[ptr++];
+            }
 
-                // 提取并写入主节点状态变量 (NX 个)
+            // 输出起点 (t=0时刻，控制量记为0)
+            csv_file << 0.0;
+            for (int i = 0; i < KRONOS_NX; ++i) csv_file << "," << x_val[i];
+            for (int i = 0; i < KRONOS_NU_BASE; ++i) csv_file << ",0.0";
+            csv_file << "\n";
+
+            // 遍历 N 个时间区间，解包每个区间内部的 d 个配点
+            for (int k = 0; k < KRONOS_N; ++k) {
+                
+                // 读取当前区间内的全部内部状态量 (D * NX)
+                std::vector<double> X_c(KRONOS_D * KRONOS_NX);
+                for (int i = 0; i < KRONOS_D * KRONOS_NX; ++i) {
+                    X_c[i] = solution[ptr++];
+                }
+
+                // 读取当前区间内的全部内部控制量 (D * NU_BASE)
+                std::vector<double> U_c(KRONOS_D * KRONOS_NU_BASE);
+                for (int i = 0; i < KRONOS_D * KRONOS_NU_BASE; ++i) {
+                    U_c[i] = solution[ptr++];
+                }
+
+                // 纵向输出这 d 个内部配点
+                double t_start = k * dt;
+                for (int j = 0; j < KRONOS_D; ++j) {
+                    double t_cj = t_start + tau[j] * dt; // 真实的物理时间戳
+                    csv_file << t_cj;
+                    
+                    // 输出该配点的状态量
+                    for (int i = 0; i < KRONOS_NX; ++i) {
+                        csv_file << "," << X_c[j * KRONOS_NX + i];
+                    }
+                    // 输出该配点的控制量/松弛变量
+                    for (int i = 0; i < KRONOS_NU_BASE; ++i) {
+                        csv_file << "," << U_c[j * KRONOS_NU_BASE + i];
+                    }
+                    csv_file << "\n";
+                }
+
+                // 吸收并跨过下一个主节点状态 X_{k+1} 
                 for (int i = 0; i < KRONOS_NX; ++i) {
-                    csv_file << "," << solution[ptr++];
+                    x_val[i] = solution[ptr++];
                 }
-
-                // 【核心修改 2】：完整提取 u 块（包含所有配点状态和松弛变量）
-                if (k < KRONOS_N) {
-                    for (int i = 0; i < KRONOS_NU; ++i) {
-                        csv_file << "," << solution[ptr++]; 
-                    }
-                } else {
-                    // 最后一帧没有控制量，必须补齐 NU 个 0.0 以对齐 CSV 列
-                    for (int i = 0; i < KRONOS_NU; ++i) {
-                        csv_file << ",0.0"; 
-                    }
-                }
-                csv_file << "\n";
             }
             csv_file.close();
-            std::cout << "  > RESULTS EXPORTED TO   : optimization_results.csv" << std::endl;
+            std::cout << "  > RESULTS EXPORTED TO   : optimization_results.csv (Flattened 76 Nodes)" << std::endl;
         }
 
         // ----------------- 打印最终报告 -----------------

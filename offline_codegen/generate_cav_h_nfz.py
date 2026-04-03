@@ -23,7 +23,6 @@ k_Q = 1.65e-4
 u_max = 10.0 * np.pi / 180.0 * t_ref 
 
 W_penalty = 100000.0
-# 【修改】移除了软约束权重 W_NFZ，硬约束不再需要惩罚项
 
 theta_NFZ1, phi_NFZ1, R_NFZ1 = 5.0 * np.pi / 180.0, 30.0 * np.pi / 180.0, 500000.0 / R0
 theta_NFZ2, phi_NFZ2, R_NFZ2 = 2.5 * np.pi / 180.0, 60.0 * np.pi / 180.0, 500000.0 / R0
@@ -34,8 +33,7 @@ N = 25
 K = N + 1
 
 n_x = 8     # 状态量: [r, theta, phi, V, gamma, psi, sigma, tf]
-# 【修改】控制量维度降回 4，去掉禁飞区松弛变量
-n_u = 4     # 控制量: [u_rate, slack_Q, slack_q, slack_n]
+n_u = 4     # 控制量: [u_rate, slack_Q, slack_q, slack_n] 
 
 tau_root = cs.collocation_points(d, 'radau')
 tau = np.append(0, tau_root) 
@@ -141,7 +139,6 @@ def path_constraints(W_k, X_k, k):
             U_cj = W_k[offset_u + j*n_u : offset_u + (j+1)*n_u]
             
             u_rate = U_cj[0]
-            # 【修改】只提取三个物理约束的松弛变量
             slack_Q, slack_q, slack_n = U_cj[1], U_cj[2], U_cj[3]
             
             cc.append((-u_max, u_rate, u_max))
@@ -163,7 +160,7 @@ def path_constraints(W_k, X_k, k):
             
             theta_cj, phi_cj = X_cj[1], X_cj[2]
             
-            # 【核心修改】将禁飞区约束改为硬约束，去掉 - slack_NFZ 尾巴
+            # 硬约束禁飞区
             dist_NFZ1_sq = (theta_cj - theta_NFZ1)**2 + (phi_cj - phi_NFZ1)**2
             cc.append((-cs.inf, R_NFZ1**2 - dist_NFZ1_sq, 0.0))
             
@@ -219,7 +216,6 @@ for k in range(K):
         ng_list[-1] += constr[1].nnz()
         opti.subject_to((constr[0] <= constr[1]) <= constr[2])
 
-# 【修改】目标函数仅保留气动、热力学路径约束的惩罚，因为禁飞区已经是绝对硬约束了
 J_obj = -x[N][3] * V_ref + W_penalty * slack_sum_path
 opti.minimize(J_obj)
 
@@ -262,13 +258,12 @@ for k in range(K):
         for j in range(d):
             u_guess.extend(x_curr_guess.tolist())
         for j in range(d):
-            # 【修改】匹配新的控制量维度 (4个0.0)
             u_guess.extend([0.0, 0.0, 0.0, 0.0])
             
         opti.set_initial(u[k], u_guess)
 
 # ==========================================
-# 7. 导出给 fatrop 的 C 代码及维度元数据
+# 7. 导出给 fatrop 的 C 代码及展平维度元数据
 # ==========================================
 opti.solver('fatrop', {
     'structure_detection': 'manual', 
@@ -289,33 +284,29 @@ print("[*] 开始生成带硬约束禁飞区的 KRONOS NLP C代码...")
 opti.to_function("kronos_nlp", [], [opti.f, opti.x]).generate('nlp_code.c', {"with_header": True})
 
 # ---------------------------------------------------------
-# 动态生成包含所有配点和松弛变量的表头
+# 动态生成用于 C++ 展平输出的元数据
+# ---------------------------------------------------------
+# ---------------------------------------------------------
+# 动态生成用于 C++ 展平输出的元数据
 # ---------------------------------------------------------
 x_base_names = ["r", "theta", "phi", "V", "gamma", "psi", "sigma", "tf"]
-# 【修改】更新表头基础名称，移除了 NFZ
-u_base_names = ["u_rate", "slack_Q", "slack_q", "slack_n"]
+u_base_names = ["u_rate", "slack_Q", "slack_q", "slack_n"] 
 
-u_names_full = []
-for j in range(1, d+1):
-    for name in x_base_names:
-        u_names_full.append(f"{name}_c{j}")
-for j in range(1, d+1):
-    for name in u_base_names:
-        u_names_full.append(f"{name}_c{j}")
-
-u_names_str = ",".join(u_names_full)
+# 【修复Bug】：删掉 [1:]，直接传入完整的 tau_root，里面刚好包含 d 个配点的比例！
+tau_str = ", ".join([str(t) for t in tau_root]) 
 
 with open('problem_metadata.h', 'w') as f:
     f.write("#pragma once\n\n")
-    f.write("// CAV_H_NFZ 问题的维度元数据\n")
+    f.write("// KRONOS 展平维度元数据\n")
     f.write(f"#define KRONOS_N  {N}\n")
     f.write(f"#define KRONOS_NX {n_x}\n")
-    f.write(f"#define KRONOS_NU {d*n_x + d*n_u} // 伪谱法下 u 包含配点状态\n")
+    f.write(f"#define KRONOS_NU_BASE {n_u} // 基础控制量维度\n")
     f.write(f"#define KRONOS_D  {d}\n")
-    f.write(f"#define KRONOS_TF_INDEX 7\n\n") 
+    f.write(f"#define KRONOS_TF_INDEX 7\n")
+    f.write(f"#define KRONOS_TAU_ROOT {{{tau_str}}} // 内部配点的时间比例\n\n") 
     f.write("// 变量名列表\n")
-    f.write('#define KRONOS_X_NAMES "r,theta,phi,V,gamma,psi,sigma,tf"\n')
-    f.write(f'#define KRONOS_U_NAMES "{u_names_str}"\n')
+    f.write(f'#define KRONOS_X_NAMES "{",".join(x_base_names)}"\n')
+    f.write(f'#define KRONOS_U_NAMES "{",".join(u_base_names)}"\n')
 
 os.chdir(current_dir)
 print(f"✅ Code generation and metadata successful! Files automatically saved to: {generated_dir}")
