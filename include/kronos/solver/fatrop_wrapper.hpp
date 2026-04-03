@@ -17,12 +17,14 @@ namespace kronos {
 
 struct CasadiSolverFunctions {
     int (*work)(casadi_int* sz_arg, casadi_int* sz_res, casadi_int* sz_iw, casadi_int* sz_w);
+    const casadi_int* (*sparsity_in)(casadi_int i);  // 【新增】
     const casadi_int* (*sparsity_out)(casadi_int i);
     void (*incref)(void);
     void (*decref)(void);
     int (*checkout)(void);
     void (*release)(int mem);
     int (*eval)(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem);
+    int (*f_cont_eval)(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem); // 【新增】
 };
 
 class FatropWrapper {
@@ -37,9 +39,12 @@ public:
 
     double get_objective() const;
     const std::vector<double>& get_solution() const;
-    
-    // 【新增】获取求解器纯计算的耗时 (单位：毫秒)
     double get_solve_time_ms() const;
+
+    // 【新增】网格自适应所需的接口
+    void set_mesh_fractions(const std::vector<double>& fractions);
+    void set_initial_guess(const std::vector<double>& x0);
+    int get_solution_size() const { return sz_res_ > 1 ? res_buffer_.size() : 0; }
 
 private:
     CasadiSolverFunctions funcs_; 
@@ -54,8 +59,11 @@ private:
     
     double obj_value_ = 0.0;          
     std::vector<double> res_buffer_; 
+
+    // 【新增】输入参数与初值的缓冲区
+    std::vector<double> param_buffer_; 
+    std::vector<double> x0_buffer_;
     
-    // 【新增】用于内部记录时间的变量
     double solve_time_ms_ = 0.0;
 };
 

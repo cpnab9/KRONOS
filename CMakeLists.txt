@@ -24,14 +24,15 @@ find_package(fatrop REQUIRED)
 # 2. 编译生成的算例库 (Plugin) - 特殊处理
 # ==========================================
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/nlp_code.c")
-    add_library(nlp_case SHARED generated/nlp_code.c)
+    # 【修改】：将生成连续动力学函数 f_cont.c 也加入编译
+    add_library(nlp_case SHARED generated/nlp_code.c generated/f_cont.c)
     target_link_libraries(nlp_case PRIVATE fatrop::fatrop)
     set_target_properties(nlp_case PROPERTIES PREFIX "")
     
     # 【核心】：单独给这一个容易卡死的巨型 C 文件施加 -O0 (不优化)
     set_target_properties(nlp_case PROPERTIES COMPILE_FLAGS "-O0")
     
-    message(STATUS "[KRONOS] Found nlp_code.c, target nlp_case configured (Forced -O0 to prevent freezing).")
+    message(STATUS "[KRONOS] Found nlp_code.c and f_cont.c, target nlp_case configured (Forced -O0 to prevent freezing).")
 else()
     message(WARNING "[KRONOS] generated/nlp_code.c not found.")
 endif()

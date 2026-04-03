@@ -1,24 +1,16 @@
 #include <iostream>
 #include <iomanip>
+#include <vector>
 #include "kronos/solver/fatrop_wrapper.hpp"
 #include "kronos/utils/library_loader.hpp"
 #include "kronos/utils/timer.hpp"
 #include "kronos/utils/exporter.hpp"
+#include "kronos/utils/mesh_refiner.hpp"
 
-// 内部报告打印函数
-void print_summary(double objective, const kronos::Timer& timer) {
-    std::cout << "\n" << std::string(50, '=') << std::endl;
-    std::cout << "   KRONOS OPTIMIZATION FINAL REPORT" << std::endl;
+void print_summary(int iter, double objective, double solve_time_ms) {
+    std::cout << "  > [Iter " << iter << "] OPTIMAL OBJECTIVE : " << std::fixed << std::setprecision(6) << objective << std::endl;
+    std::cout << "  > [Iter " << iter << "] FATROP EXEC TIME  : " << std::setprecision(3) << solve_time_ms << " ms" << std::endl;
     std::cout << std::string(50, '-') << std::endl;
-    std::cout << "  > OPTIMAL OBJECTIVE     : " << std::fixed << std::setprecision(6) << objective << std::endl;
-    std::cout << "  > SOLVER STATUS         : CONVERGED\n" << std::endl;
-    std::cout << "  [ TIMING ANALYSIS ]" << std::endl;
-    std::cout << "  * Library Loading       : " << std::setprecision(3) << std::setw(8) << timer.get("load") << " ms" << std::endl;
-    std::cout << "  * Memory Initialization : " << std::setprecision(3) << std::setw(8) << timer.get("init") << " ms" << std::endl;
-    std::cout << "  * Fatrop Execution      : " << std::setprecision(3) << std::setw(8) << timer.get("solve") << " ms" << std::endl;
-    std::cout << std::string(50, '-') << std::endl;
-    std::cout << "  > TOTAL PIPELINE TIME   : " << std::setprecision(3) << std::setw(8) << timer.get("total") << " ms" << std::endl;
-    std::cout << std::string(50, '=') << "\n" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -31,28 +23,49 @@ int main(int argc, char* argv[]) {
         kronos::Timer timer;
         timer.start("total");
 
-        // 阶段 1：加载动态库
-        timer.start("load");
         auto funcs = kronos::LibraryLoader::load(argv[1]); 
-        timer.stop("load");
-
-        // 阶段 2：初始化求解器
-        timer.start("init");
         kronos::FatropWrapper solver(funcs); 
-        timer.stop("init");
 
-        // 阶段 3：执行求解
-        solver.solve(); 
-        timer.set("solve", solver.get_solve_time_ms()); // 获取包装器内部计时
+        const int max_adapt_iters = 3;
+        int N = kronos::MeshRefiner::N;
+        
+        std::vector<double> current_fractions(N, 1.0 / N);
+        
+        // 【关键修复】：第一轮直接使用构建好的物理插值！
+        std::vector<double> current_x0 = kronos::MeshRefiner::build_initial_guess();
+
+        std::cout << "\n" << std::string(50, '=') << std::endl;
+        std::cout << "   KRONOS ADAPTIVE MESH OPTIMIZATION PIPELINE" << std::endl;
+        std::cout << std::string(50, '=') << std::endl;
+
+        for (int iter = 1; iter <= max_adapt_iters; ++iter) {
+            std::cout << "[*] Running Iteration " << iter << " / " << max_adapt_iters << " ..." << std::endl;
+
+            // 每次迭代前，均注入参数与合法初值
+            solver.set_mesh_fractions(current_fractions);
+            solver.set_initial_guess(current_x0);
+
+            solver.solve(); 
+            
+            print_summary(iter, solver.get_objective(), solver.get_solve_time_ms());
+
+            if (iter == max_adapt_iters) break;
+
+            // 读取成功解，生成更精准的网格参数与 Warm-start 初值
+            const auto& sol = solver.get_solution();
+            auto refine_res = kronos::MeshRefiner::compute(current_fractions, sol);
+            
+            current_fractions = refine_res.new_fractions;
+            current_x0 = refine_res.new_initial_guess;
+        }
 
         timer.stop("total");
 
-        // 阶段 4：导出与报告
-        kronos::Exporter::save_to_csv("optimization_results.csv", solver.get_solution());
-        print_summary(solver.get_objective(), timer);
+        kronos::Exporter::save_to_csv("adaptive_optimization_results.csv", solver.get_solution());
+        std::cout << "  > TOTAL PIPELINE TIME   : " << std::setprecision(3) << timer.get("total") << " ms\n" << std::endl;
 
     } catch (const std::exception& e) {
-        std::cerr << "[ERROR] " << e.what() << std::endl;
+        std::cerr << "\n[FATAL ERROR] " << e.what() << std::endl;
         return -1;
     }
     return 0;
