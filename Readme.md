@@ -9,6 +9,16 @@
 * **Fast Solver Integration**: Built around the `fatrop` (Fast Trajectory Optimization) solver for high-speed convergence.
 * **Modular C++ Architecture**: Provides a clean wrapper (`FatropWrapper`) to bridge generated NLP functions with the C++ runtime.
 
+## 🗺️ Roadmap
+
+### Advanced Algorithmic Capabilities
+- [ ] **Multi-Phase Pseudospectral Method with Variable Intervals:** Employs a fixed-dimension varying-mesh approach to guarantee high precision and a stable numerical structure.
+- [ ] **Primal-Dual Mesh Mapping Warm Start:** Ensures ultra-fast convergence across different phases and mesh refinements.
+- [ ] **Soft Constraint Relaxation:** Guarantees absolute solvability and feasibility for practical engineering applications.
+
+### Performance Maximization
+- [ ] **Parallelized Zero-Allocation Architecture:** Designed to extract maximum computational performance from the underlying hardware.
+
 ## 📂 Project Structure
 
 ```text
