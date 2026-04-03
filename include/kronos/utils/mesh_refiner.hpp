@@ -18,11 +18,11 @@ public:
 
     static constexpr int N = 20; 
     static constexpr int d = 4;
-    static constexpr int nx = 8;
-    static constexpr int nu = 4; 
+    static constexpr int nx = 9;   // [r, theta, phi, V, gamma, psi, sigma, alpha, tf]
+    static constexpr int nu = 5;   // [sigma_rate, alpha_rate, slack_Q, slack_q, slack_n]
     static constexpr int nu_colloc = d * nx + d * nu; 
 
-    // 构建首次迭代的物理初值猜测 (对齐 Python 端的两点线性插值)
+    // 构建第一轮的物理初值猜测 (严格对齐 Python main.py 里的 1e-3 松弛量)
     static std::vector<double> build_initial_guess() {
         const double PI = 3.14159265358979323846;
         double R0 = 6378000.0;
@@ -32,10 +32,10 @@ public:
         double tf_guess = 1500.0 / t_ref;
 
         std::vector<double> x0_val = {
-            1.0 + 100000.0/R0, 0.0, 0.0, 7450.0/V_ref, -0.5*PI/180.0, 0.0, 0.0, tf_guess
+            1.0 + 100000.0/R0, 0.0, 0.0, 7450.0/V_ref, -0.5*PI/180.0, 0.0, 0.0, 40.0*PI/180.0, tf_guess
         };
         std::vector<double> xf_val = {
-            1.0 + 25000.0/R0, 12.0*PI/180.0, 70.0*PI/180.0, 2000.0/V_ref, -10.0*PI/180.0, 90.0*PI/180.0, 0.0, tf_guess
+            1.0 + 25000.0/R0, 12.0*PI/180.0, 70.0*PI/180.0, 2000.0/V_ref, -10.0*PI/180.0, 90.0*PI/180.0, 0.0, 15.0*PI/180.0, tf_guess
         };
 
         std::vector<double> guess;
@@ -46,25 +46,21 @@ public:
                 x_curr[i] = x0_val[i] + frac * (xf_val[i] - x0_val[i]);
             }
             
-            // 1. 添加主节点状态 x[k]
             guess.insert(guess.end(), x_curr.begin(), x_curr.end());
 
-            // 2. 添加配点变量 W_k
             if (k < N) {
-                // 配点内部状态 Xc (大小 d * nx)：使用当前主节点平铺
                 for (int j = 0; j < d; ++j) {
                     guess.insert(guess.end(), x_curr.begin(), x_curr.end());
                 }
-                // 配点控制量 Uc (大小 d * nu)：[u_rate, slack_Q, slack_q, slack_n] 使用 0 平铺
+                // 【核心修复1】：松弛变量初始化为 1e-3，坚决不能是 0.0！
                 for (int j = 0; j < d; ++j) {
-                    guess.insert(guess.end(), {0.0, 0.0, 0.0, 0.0});
+                    guess.insert(guess.end(), {0.0, 0.0, 1e-3, 1e-3, 1e-3});
                 }
             }
         }
         return guess;
     }
 
-    // 一维线性插值
     static std::vector<double> interp1d(const std::vector<double>& t_nodes, const std::vector<std::vector<double>>& y_nodes, double t_query) {
         if (t_query <= t_nodes.front()) return y_nodes.front();
         if (t_query >= t_nodes.back()) return y_nodes.back();
@@ -82,13 +78,14 @@ public:
         return result;
     }
 
-    // 网格重分配与 Warm-start 计算
+    // 网格重构与热启动初值提取
     static RefineResult compute(const std::vector<double>& old_fractions, const std::vector<double>& flat_solution) {
-        double tf_opt = flat_solution[7]; 
+        double tf_opt = flat_solution[8]; 
         std::vector<double> t_nodes_old = {0.0};
         for (double frac : old_fractions) t_nodes_old.push_back(t_nodes_old.back() + frac * tf_opt);
 
         std::vector<std::vector<double>> x_series;
+        std::vector<std::vector<double>> u_series;
         std::vector<double> t_x_series;
         
         int offset = 0;
@@ -96,12 +93,21 @@ public:
             std::vector<double> x_k(flat_solution.begin() + offset, flat_solution.begin() + offset + nx);
             x_series.push_back(x_k);
             t_x_series.push_back(t_nodes_old[k]);
-            offset += nx + nu_colloc;
+            
+            offset += nx;
+            offset += d * nx; // 跳过配点状态 Xc
+            
+            // 提取配点的第一个控制量 U_c0 用于构建控制插值
+            std::vector<double> u_k(flat_solution.begin() + offset, flat_solution.begin() + offset + nu);
+            u_series.push_back(u_k);
+            
+            offset += d * nu; 
         }
         x_series.push_back(std::vector<double>(flat_solution.begin() + offset, flat_solution.begin() + offset + nx));
+        u_series.push_back(u_series.back()); // 终端补齐
         t_x_series.push_back(t_nodes_old.back());
 
-        // 计算网格误差 Monitor function (依据 V 和 gamma 的导数跃变)
+        // 计算网格误差 Monitor function 
         std::vector<double> desired_dt(N, 0.0);
         double dt_sum = 0.0;
         for (int k = 0; k < N; ++k) {
@@ -130,16 +136,22 @@ public:
 
         std::vector<double> new_flat_x0;
         for (int k = 0; k < N; ++k) {
+            // 状态插值
             auto x_interp = interp1d(t_x_series, x_series, t_nodes_new[k]);
             new_flat_x0.insert(new_flat_x0.end(), x_interp.begin(), x_interp.end());
 
-            // 【关键修复】：内部配点状态必须用主节点状态填充，不能用零/极小值
             for (int j = 0; j < d; ++j) {
                 new_flat_x0.insert(new_flat_x0.end(), x_interp.begin(), x_interp.end());
             }
-            // 内部控制量可用零填充
+            
+            // 【核心修复2】：控制量插值与 Slack 边界保护 (对齐 Python main.py)
+            auto u_interp = interp1d(t_x_series, u_series, t_nodes_new[k]);
+            u_interp[2] = std::max(u_interp[2], 1e-4); // slack_Q
+            u_interp[3] = std::max(u_interp[3], 1e-4); // slack_q
+            u_interp[4] = std::max(u_interp[4], 1e-4); // slack_n
+            
             for (int j = 0; j < d; ++j) {
-                new_flat_x0.insert(new_flat_x0.end(), {0.0, 0.0, 0.0, 0.0});
+                new_flat_x0.insert(new_flat_x0.end(), u_interp.begin(), u_interp.end());
             }
         }
         auto x_last = interp1d(t_x_series, x_series, t_nodes_new.back());
