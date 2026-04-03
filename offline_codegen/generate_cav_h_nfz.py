@@ -23,20 +23,19 @@ k_Q = 1.65e-4
 u_max = 10.0 * np.pi / 180.0 * t_ref 
 
 W_penalty = 100000.0
-W_NFZ = 4000.0   # 禁飞区软约束的惩罚权重
+# 【修改】移除了软约束权重 W_NFZ，硬约束不再需要惩罚项
 
-# --- 新增：禁飞区参数 ---
-theta_NFZ1, phi_NFZ1, R_NFZ1 = 5.0 * np.pi / 180.0, 30.0 * np.pi / 180.0, 0.0 / R0
-theta_NFZ2, phi_NFZ2, R_NFZ2 = 2.5 * np.pi / 180.0, 60.0 * np.pi / 180.0, 0.0 / R0
+theta_NFZ1, phi_NFZ1, R_NFZ1 = 5.0 * np.pi / 180.0, 30.0 * np.pi / 180.0, 500000.0 / R0
+theta_NFZ2, phi_NFZ2, R_NFZ2 = 2.5 * np.pi / 180.0, 60.0 * np.pi / 180.0, 500000.0 / R0
 
 # --- KRONOS 配置 ---
-d = 3       # Radau 多项式阶数
-N = 25      # 划分的区间数
+d = 3       
+N = 25      
 K = N + 1
 
 n_x = 8     # 状态量: [r, theta, phi, V, gamma, psi, sigma, tf]
-# 控制量从 4 增加到 6，加入禁飞区的松弛变量
-n_u = 6     # 控制量: [u_rate, slack_Q, slack_q, slack_n, slack_NFZ1, slack_NFZ2]
+# 【修改】控制量维度降回 4，去掉禁飞区松弛变量
+n_u = 4     # 控制量: [u_rate, slack_Q, slack_q, slack_n]
 
 tau_root = cs.collocation_points(d, 'radau')
 tau = np.append(0, tau_root) 
@@ -52,7 +51,7 @@ for j in range(d+1):
         C[j,r] = dp(tau[r])
 
 # ==========================================
-# 2. 连续时间动力学 (带数值安全防护)
+# 2. 连续时间动力学 
 # ==========================================
 def create_continuous_dynamics():
     states = cs.SX.sym('x', n_x)
@@ -61,7 +60,6 @@ def create_continuous_dynamics():
     r, theta, phi, V, gamma, psi, sigma, tf = states[0], states[1], states[2], states[3], states[4], states[5], states[6], states[7]
     u = controls[0] 
     
-    # 防止除以0的安全底线
     safe_r = cs.fmax(r, 0.5)          
     safe_V = cs.fmax(V, 1e-4)         
     safe_cos_phi = cs.fmax(cs.cos(phi), 1e-4)
@@ -78,7 +76,6 @@ def create_continuous_dynamics():
     L_acc = (0.5 * rho * V_dim**2 * Aref * CL) / (m * g0)
     D_acc = (0.5 * rho * V_dim**2 * Aref * CD) / (m * g0)
 
-    # 运动学方程
     r_dot = V * cs.sin(gamma)
     theta_dot = V * cs.cos(gamma) * cs.sin(psi) / (safe_r * safe_cos_phi)
     phi_dot = V * cs.cos(gamma) * cs.cos(psi) / safe_r
@@ -144,18 +141,14 @@ def path_constraints(W_k, X_k, k):
             U_cj = W_k[offset_u + j*n_u : offset_u + (j+1)*n_u]
             
             u_rate = U_cj[0]
+            # 【修改】只提取三个物理约束的松弛变量
             slack_Q, slack_q, slack_n = U_cj[1], U_cj[2], U_cj[3]
-            slack_NFZ1, slack_NFZ2 = U_cj[4], U_cj[5]
             
-            # --- 基础控制与松弛变量边界 ---
             cc.append((-u_max, u_rate, u_max))
             cc.append((0.0, slack_Q, cs.inf))
             cc.append((0.0, slack_q, cs.inf))
             cc.append((0.0, slack_n, cs.inf))
-            cc.append((0.0, slack_NFZ1, cs.inf))
-            cc.append((0.0, slack_NFZ2, cs.inf))
             
-            # --- 计算配点气动数据 ---
             _, rho, V_dim, L_acc, D_acc = f_cont(X_cj, U_cj)
             safe_V_dim = cs.fmax(V_dim, 1.0)
             safe_rho = cs.fmax(rho, 1e-8)
@@ -164,19 +157,18 @@ def path_constraints(W_k, X_k, k):
             q_dyn = 0.5 * safe_rho * safe_V_dim**2
             n_load = cs.sqrt(L_acc**2 + D_acc**2 + 1e-8)
             
-            # --- 动力学与热力学路径不等式约束 ---
             cc.append((-cs.inf, Q_dot / Q_dot_max - (1.0 + slack_Q), 0.0))
             cc.append((-cs.inf, q_dyn / q_max - (1.0 + slack_q), 0.0))
             cc.append((-cs.inf, n_load / n_max - (1.0 + slack_n), 0.0))
             
-            # --- 新增：禁飞区避让约束 ---
             theta_cj, phi_cj = X_cj[1], X_cj[2]
             
+            # 【核心修改】将禁飞区约束改为硬约束，去掉 - slack_NFZ 尾巴
             dist_NFZ1_sq = (theta_cj - theta_NFZ1)**2 + (phi_cj - phi_NFZ1)**2
-            cc.append((-cs.inf, R_NFZ1**2 - dist_NFZ1_sq - slack_NFZ1, 0.0))
+            cc.append((-cs.inf, R_NFZ1**2 - dist_NFZ1_sq, 0.0))
             
             dist_NFZ2_sq = (theta_cj - theta_NFZ2)**2 + (phi_cj - phi_NFZ2)**2
-            cc.append((-cs.inf, R_NFZ2**2 - dist_NFZ2_sq - slack_NFZ2, 0.0))
+            cc.append((-cs.inf, R_NFZ2**2 - dist_NFZ2_sq, 0.0))
             
     if k == 0:
         x0_val =[1.0 + 100000.0/R0, 0.0, 0.0, 7450.0/V_ref, -0.5*np.pi/180.0, 0.0, 0.0]
@@ -212,7 +204,6 @@ for k in range(K):
     u.append(opti.variable(nu_list[k]))
 
 slack_sum_path = 0
-slack_sum_nfz = 0
 
 for k in range(K):
     if k < K - 1:
@@ -220,9 +211,7 @@ for k in range(K):
         offset_u = d * n_x
         for j in range(d):
             U_cj = u[k][offset_u + j*n_u : offset_u + (j+1)*n_u]
-            # 分别累加路径松弛和禁飞区松弛
             slack_sum_path += (U_cj[1] + U_cj[2] + U_cj[3])
-            slack_sum_nfz += (U_cj[4] + U_cj[5])
         
     path_constr = path_constraints(u[k], x[k], k)
     ng_list.append(0)
@@ -230,8 +219,8 @@ for k in range(K):
         ng_list[-1] += constr[1].nnz()
         opti.subject_to((constr[0] <= constr[1]) <= constr[2])
 
-# 更新目标函数：加入对禁飞区软约束的惩罚项
-J_obj = -x[N][3] * V_ref + W_penalty * slack_sum_path + W_NFZ * slack_sum_nfz
+# 【修改】目标函数仅保留气动、热力学路径约束的惩罚，因为禁飞区已经是绝对硬约束了
+J_obj = -x[N][3] * V_ref + W_penalty * slack_sum_path
 opti.minimize(J_obj)
 
 # ==========================================
@@ -272,14 +261,14 @@ for k in range(K):
         u_guess = []
         for j in range(d):
             u_guess.extend(x_curr_guess.tolist())
-        # [u_rate, slack_Q, slack_q, slack_n, slack_NFZ1, slack_NFZ2] 全赋初值 0
         for j in range(d):
-            u_guess.extend([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+            # 【修改】匹配新的控制量维度 (4个0.0)
+            u_guess.extend([0.0, 0.0, 0.0, 0.0])
             
         opti.set_initial(u[k], u_guess)
 
 # ==========================================
-# 7. 导出给 fatrop 的 C 代码
+# 7. 导出给 fatrop 的 C 代码及维度元数据
 # ==========================================
 opti.solver('fatrop', {
     'structure_detection': 'manual', 
@@ -296,20 +285,37 @@ generated_dir = os.path.join(current_dir, '..', 'generated')
 os.makedirs(generated_dir, exist_ok=True)
 os.chdir(generated_dir)
 
-print("[*] 开始生成带禁飞区的 KRONOS NLP C代码...")
+print("[*] 开始生成带硬约束禁飞区的 KRONOS NLP C代码...")
 opti.to_function("kronos_nlp", [], [opti.f, opti.x]).generate('nlp_code.c', {"with_header": True})
 
-# 【新增】：生成用于 C++ 导出 CSV 的维度元数据
+# ---------------------------------------------------------
+# 动态生成包含所有配点和松弛变量的表头
+# ---------------------------------------------------------
+x_base_names = ["r", "theta", "phi", "V", "gamma", "psi", "sigma", "tf"]
+# 【修改】更新表头基础名称，移除了 NFZ
+u_base_names = ["u_rate", "slack_Q", "slack_q", "slack_n"]
+
+u_names_full = []
+for j in range(1, d+1):
+    for name in x_base_names:
+        u_names_full.append(f"{name}_c{j}")
+for j in range(1, d+1):
+    for name in u_base_names:
+        u_names_full.append(f"{name}_c{j}")
+
+u_names_str = ",".join(u_names_full)
+
 with open('problem_metadata.h', 'w') as f:
     f.write("#pragma once\n\n")
     f.write("// CAV_H_NFZ 问题的维度元数据\n")
     f.write(f"#define KRONOS_N  {N}\n")
     f.write(f"#define KRONOS_NX {n_x}\n")
     f.write(f"#define KRONOS_NU {d*n_x + d*n_u} // 伪谱法下 u 包含配点状态\n")
-    f.write(f"#define KRONOS_D  {d}\n\n")
+    f.write(f"#define KRONOS_D  {d}\n")
+    f.write(f"#define KRONOS_TF_INDEX 7\n\n") 
     f.write("// 变量名列表\n")
     f.write('#define KRONOS_X_NAMES "r,theta,phi,V,gamma,psi,sigma,tf"\n')
-    f.write('#define KRONOS_U_NAMES "u_rate,slack_Q,slack_q,slack_n,slack_NFZ1,slack_NFZ2"\n')
+    f.write(f'#define KRONOS_U_NAMES "{u_names_str}"\n')
 
 os.chdir(current_dir)
 print(f"✅ Code generation and metadata successful! Files automatically saved to: {generated_dir}")
