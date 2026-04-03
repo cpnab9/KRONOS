@@ -34,13 +34,13 @@ def get_path_constraints(W_k, X_k, k, colloc_fun, f_cont, dt_k):
     """生成各个配点上的路径与边界约束"""
     cc = []
     
-    # ================= 新增：物理状态硬边界 =================
-    # 统一在这里添加，如果是 manual 结构检测模式，也会被自动统计到 ng_list 中
-    cc.append((1.0, X_k[0], 1.0 + 120000.0/cfg.R0))               # r: 限制在地面到 120km 之间
-    cc.append((100.0/cfg.V_ref, X_k[3], 8000.0/cfg.V_ref))        # V: 速度下限与上限
-    cc.append((-25.0*np.pi/180.0, X_k[4], 15.0*np.pi/180.0))      # gamma: 弹道倾角不能大起大落
-    cc.append((-85.0*np.pi/180.0, X_k[6], 85.0*np.pi/180.0))      # sigma: 倾侧角限制防翻转
-    cc.append((100.0/cfg.t_ref, X_k[7], 3000.0/cfg.t_ref))        # tf: 总时间在合理范围内
+    # 【修改1】：更新 tf 的索引为 8，并加入 alpha (索引 7) 的边界约束
+    cc.append((1.0, X_k[0], 1.0 + 120000.0/cfg.R0))               # r
+    cc.append((100.0/cfg.V_ref, X_k[3], 8000.0/cfg.V_ref))        # V
+    cc.append((-25.0*np.pi/180.0, X_k[4], 15.0*np.pi/180.0))      # gamma
+    cc.append((-85.0*np.pi/180.0, X_k[6], 85.0*np.pi/180.0))      # sigma
+    cc.append((cfg.alpha_min, X_k[7], cfg.alpha_max))             # alpha [新增]
+    cc.append((100.0/cfg.t_ref, X_k[8], 3000.0/cfg.t_ref))        # tf [修正索引]
 
     if k < cfg.K - 1:
         _, eqs = colloc_fun(X_k, W_k, dt_k) 
@@ -51,10 +51,16 @@ def get_path_constraints(W_k, X_k, k, colloc_fun, f_cont, dt_k):
             X_cj = W_k[offset_x + j*cfg.n_x : offset_x + (j+1)*cfg.n_x]
             U_cj = W_k[offset_u + j*cfg.n_u : offset_u + (j+1)*cfg.n_u]
             
-            u_rate = U_cj[0]
-            slack_Q, slack_q, slack_n = U_cj[1], U_cj[2], U_cj[3]
+            # 【修改2】：提取新的控制量
+            sigma_rate = U_cj[0]
+            alpha_rate = U_cj[1]
+            slack_Q, slack_q, slack_n = U_cj[2], U_cj[3], U_cj[4]
             
-            cc.append((-cfg.u_max, u_rate, cfg.u_max))
+            # 限制速率
+            cc.append((-cfg.sigma_rate_max, sigma_rate, cfg.sigma_rate_max))
+            cc.append((-cfg.alpha_rate_max, alpha_rate, cfg.alpha_rate_max))
+            
+            # 限制松弛变量
             cc.append((0.0, slack_Q, cs.inf))
             cc.append((0.0, slack_q, cs.inf))
             cc.append((0.0, slack_n, cs.inf))
@@ -81,8 +87,9 @@ def get_path_constraints(W_k, X_k, k, colloc_fun, f_cont, dt_k):
             cc.append((-cs.inf, cfg.R_NFZ2**2 - dist_NFZ2_sq, 0.0))
             
     if k == 0:
-        x0_val =[1.0 + 100000.0/cfg.R0, 0.0, 0.0, 7450.0/cfg.V_ref, -0.5*np.pi/180.0, 0.0, 0.0]
-        for i in range(7):
+        # 【修改3】：添加初始状态中的 alpha_0，这里设为 40.0 度作为初始攻角
+        x0_val =[1.0 + 100000.0/cfg.R0, 0.0, 0.0, 7450.0/cfg.V_ref, -0.5*np.pi/180.0, 0.0, 0.0, 40.0*np.pi/180.0]
+        for i in range(8):
             cc.append((x0_val[i], X_k[i], x0_val[i]))
             
     elif k == cfg.K - 1:
@@ -92,6 +99,7 @@ def get_path_constraints(W_k, X_k, k, colloc_fun, f_cont, dt_k):
         cc.append((xf_target[2], X_k[2], xf_target[2]))
         cc.append((xf_target[3], X_k[4], xf_target[3])) 
         cc.append((xf_target[4], X_k[5], xf_target[4])) 
+        # (终端攻角通常自由即可，不予硬性约束)
         
     return cc
 # --- END OF FILE collocation.py ---

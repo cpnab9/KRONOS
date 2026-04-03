@@ -15,9 +15,8 @@ def compute_mesh_and_warmstart(sol, x_vars, u_vars, f_cont, old_fractions):
     tau = np.append(0, tau_root)
     tau_u = np.array(tau_root)
     
-    tf_opt = sol.value(x_vars[0][7]) # 提取无量纲总时间
+    tf_opt = sol.value(x_vars[0][8]) # 【修改】：tf 提取索引修正为 8
     
-    # 构建旧网格的时间节点 (物理真实比例，0到tf)
     t_nodes_old = [0.0]
     for frac in old_fractions:
         t_nodes_old.append(t_nodes_old[-1] + frac * tf_opt)
@@ -29,8 +28,7 @@ def compute_mesh_and_warmstart(sol, x_vars, u_vars, f_cont, old_fractions):
     
     errors = np.zeros(N)
     
-    # --- 1. 提取所有状态并计算误差 ---
-    tau_test = 0.5 # 取区间中点进行误差探测
+    tau_test = 0.5 
     p_X = np.zeros(d+1); dp_X = np.zeros(d+1)
     for j in range(d+1):
         p = np.poly1d([1.0])
@@ -70,44 +68,37 @@ def compute_mesh_and_warmstart(sol, x_vars, u_vars, f_cont, old_fractions):
             t_u_old.append(t_nodes_old[k] + tau_u[j] * dt_k)
             u_old.append(U_mat[:, j])
             
-        # 误差探测：中点的多项式导数 vs 真实连续动力学导数
         X_poly = X_mat @ p_X
         U_poly = U_mat @ p_U
         dX_poly_dt = (X_mat @ dp_X) / dt_k
         f_eval = f_cont(X_poly, U_poly)[0].full().flatten()
         
         defect = np.abs(dX_poly_dt - f_eval)
-        # 用过载（V）和弹道倾角（gamma）的误差作为主导向
+        # alpha虽然插入在7号位置，但3和4仍然是V和gamma的位置，无需修改
         e_V = defect[3] * cfg.V_ref / cfg.t_ref
         e_gamma = defect[4] * 180.0 / np.pi / cfg.t_ref
         errors[k] = e_V + e_gamma 
 
-    # 尾节点
     t_x_old.append(t_nodes_old[-1])
     x_old.append(sol.value(x_vars[-1]))
     
-    # 转换为数组，方便 scipy 插值
     t_x_old = np.array(t_x_old)
-    x_old = np.array(x_old).T # Shape: (n_x, total_points)
+    x_old = np.array(x_old).T 
     t_u_old = np.array(t_u_old)
-    u_old = np.array(u_old).T # Shape: (n_u, total_points)
+    u_old = np.array(u_old).T 
     
-    # --- 2. 基于等分布原则重新计算网格比例 ---
-    eps = 1e-2 # 平滑常数，防止平缓区网格无限变大
+    eps = 1e-2 
     monitor = np.sqrt(errors) + eps
     desired_dt = 1.0 / monitor 
     desired_fractions = desired_dt / np.sum(desired_dt)
     
-    # 为防止单次网格剧变导致求解器崩溃，引入 0.5 的平滑因子 (阻尼)
     new_fractions = 0.5 * old_fractions + 0.5 * desired_fractions
     new_fractions = new_fractions / np.sum(new_fractions)
-    
-    # --- 3. 将原解插值到新网格上 ---
+
     t_nodes_new = [0.0]
     for frac in new_fractions:
         t_nodes_new.append(t_nodes_new[-1] + frac * tf_opt)
-        
-    # 【修改3生效处】：取消外推，改为边界钳位，避免松弛变量出现负数
+    
     interp_x_fun = interp1d(t_x_old, x_old, kind='linear', bounds_error=False, fill_value=(x_old[:, 0], x_old[:, -1]))
     interp_u_fun = interp1d(t_u_old, u_old, kind='linear', bounds_error=False, fill_value=(u_old[:, 0], u_old[:, -1]))
     
@@ -121,10 +112,10 @@ def compute_mesh_and_warmstart(sol, x_vars, u_vars, f_cont, old_fractions):
         warm_x.append(interp_x_fun(t_k))
         
         w_k_guess = []
-        for j in range(1, d+1):  # Xc 插值
+        for j in range(1, d+1):  
             t_xc = t_k + tau[j] * dt_k
             w_k_guess.extend(interp_x_fun(t_xc).tolist())
-        for j in range(d):       # Uc 插值
+        for j in range(d):       
             t_uc = t_k + tau_u[j] * dt_k
             w_k_guess.extend(interp_u_fun(t_uc).tolist())
             

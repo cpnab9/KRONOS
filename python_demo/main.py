@@ -33,13 +33,11 @@ def main():
             u.append(opti.variable(nu_list[k]))
 
         slack_sum_path = 0
-        u_rate_sq_sum = 0  # 能量正则化项积分
+        u_rate_sq_sum = 0  
 
         for k in range(cfg.K):
-            # 注意：状态量约束已经移入到 get_path_constraints 中，这里不再单独调用 bounded
-            
             if k < cfg.K - 1:
-                tf_var = x[k][7]
+                tf_var = x[k][8] # 【修改1】：tf 的索引修正为 8
                 dt_k = tf_var * mesh_fractions[k]
                 
                 X_next, _ = colloc_fun(x[k], u[k], dt_k)
@@ -49,10 +47,12 @@ def main():
                 for j in range(cfg.d):
                     U_cj = u[k][offset_u + j*cfg.n_u : offset_u + (j+1)*cfg.n_u]
                     
-                    u_rate = U_cj[0]
-                    u_rate_sq_sum += (u_rate**2) * dt_k  
+                    # 【修改2】：惩罚项中同时加上倾侧角速率和攻角速率，促使气动操作平稳
+                    sigma_rate = U_cj[0]
+                    alpha_rate = U_cj[1]
+                    u_rate_sq_sum += (sigma_rate**2 + alpha_rate**2) * dt_k  
                     
-                    slack_sum_path += (U_cj[1] + U_cj[2] + U_cj[3])
+                    slack_sum_path += (U_cj[2] + U_cj[3] + U_cj[4])
                 
                 path_constr = get_path_constraints(u[k], x[k], k, colloc_fun, f_cont, dt_k)
             else:
@@ -63,14 +63,14 @@ def main():
                 ng_list[-1] += constr[1].nnz()
                 opti.subject_to((constr[0] <= constr[1]) <= constr[2])
 
-        # 正则化目标函数
         J_obj = -x[cfg.N][3] * cfg.V_ref + cfg.W_penalty * slack_sum_path + 100.0 * u_rate_sq_sum
         opti.minimize(J_obj)
 
         if iter_idx == 0:
             tf_guess = 1500.0 / cfg.t_ref 
-            x0_guess = np.array([1.0 + 100000.0/cfg.R0, 0.0, 0.0, 7450.0/cfg.V_ref, -0.5*np.pi/180.0, 0.0, 0.0, tf_guess])
-            xf_guess = np.array([1.0 + 25000.0/cfg.R0, 12.0*np.pi/180.0, 70.0*np.pi/180.0, 2000.0/cfg.V_ref, -10.0*np.pi/180.0, 90.0*np.pi/180.0, 0.0, tf_guess])
+            # 【修改3】：猜测值增加一项 alpha 的过度值
+            x0_guess = np.array([1.0 + 100000.0/cfg.R0, 0.0, 0.0, 7450.0/cfg.V_ref, -0.5*np.pi/180.0, 0.0, 0.0, 40.0*np.pi/180.0, tf_guess])
+            xf_guess = np.array([1.0 + 25000.0/cfg.R0, 12.0*np.pi/180.0, 70.0*np.pi/180.0, 2000.0/cfg.V_ref, -10.0*np.pi/180.0, 90.0*np.pi/180.0, 0.0, 15.0*np.pi/180.0, tf_guess])
 
             for k in range(cfg.K):
                 interp_frac = k / (cfg.K - 1) if cfg.K > 1 else 0
@@ -82,7 +82,8 @@ def main():
                     for j in range(cfg.d):
                         u_guess.extend(x_curr_guess.tolist())
                     for j in range(cfg.d):
-                        u_guess.extend([0.0, 1e-3, 1e-3, 1e-3])
+                        # 【修改4】：控制初值补齐 0.0 (对应 alpha_rate)
+                        u_guess.extend([0.0, 0.0, 1e-3, 1e-3, 1e-3])
                     opti.set_initial(u[k], u_guess)
         else:
             for k in range(cfg.K):
@@ -91,9 +92,10 @@ def main():
                     u_warm_safe = np.array(warm_u[k])
                     offset_u = cfg.d * cfg.n_x
                     for j in range(cfg.d):
-                        idx_slack_Q = offset_u + j*cfg.n_u + 1
-                        idx_slack_q = offset_u + j*cfg.n_u + 2
-                        idx_slack_n = offset_u + j*cfg.n_u + 3
+                        # 【修改5】：松弛变量的索引自 +2 起算
+                        idx_slack_Q = offset_u + j*cfg.n_u + 2
+                        idx_slack_q = offset_u + j*cfg.n_u + 3
+                        idx_slack_n = offset_u + j*cfg.n_u + 4
                         
                         u_warm_safe[idx_slack_Q] = max(u_warm_safe[idx_slack_Q], 1e-4)
                         u_warm_safe[idx_slack_q] = max(u_warm_safe[idx_slack_q], 1e-4)
@@ -101,9 +103,6 @@ def main():
                         
                     opti.set_initial(u[k], u_warm_safe.tolist())
 
-        # ==================== 重点修改区 ====================
-        # 完全移除了 'nx', 'nu', 'ng', 'structure_detection': 'manual'
-        # 让 Fatrop 自动侦测对角线结构矩阵，这能完全避免后续任意增改约束时的统计错位问题！
         opti.solver('fatrop', {
             'structure_detection': 'auto', 
             'expand': True, 
