@@ -79,6 +79,11 @@ def compute_mesh_and_warmstart(sol, x_vars, u_vars, f_cont, old_fractions):
         e_gamma = defect[4] * 180.0 / np.pi / cfg.t_ref
         errors[k] = e_V + e_gamma 
 
+    max_error = np.max(errors)
+    mean_error = np.mean(errors)
+    print(f"    -> 当前迭代最大截断误差: {max_error:.6e}")
+    print(f"    -> 当前迭代平均截断误差: {mean_error:.6e}")
+
     t_x_old.append(t_nodes_old[-1])
     x_old.append(sol.value(x_vars[-1]))
     
@@ -123,5 +128,5 @@ def compute_mesh_and_warmstart(sol, x_vars, u_vars, f_cont, old_fractions):
         
     warm_x.append(interp_x_fun(t_nodes_new[-1]))
     
-    return new_fractions, warm_x, warm_u
+    return new_fractions, warm_x, warm_u, mean_error
 # --- END OF FILE adaptive_mesh.py ---

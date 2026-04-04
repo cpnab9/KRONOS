@@ -6,12 +6,13 @@ from dynamics import create_continuous_dynamics
 from collocation import create_collocation_function, get_path_constraints
 from visualization import extract_and_plot
 from adaptive_mesh import compute_mesh_and_warmstart
+from error_analysis import compute_and_plot_integration_error
 
 def main():
     f_cont = create_continuous_dynamics()
     colloc_fun = create_collocation_function(f_cont)
 
-    max_adapt_iters = 3  
+    max_adapt_iters = cfg.max_adapt_iters  
     
     mesh_fractions = np.ones(cfg.N) / cfg.N 
     warm_x = None
@@ -110,16 +111,32 @@ def main():
             'fatrop.print_level': 5, 
         })
 
+        # === 在 main.py 中修改 try...except 代码块 ===
         try:
             sol = opti.solve()
             print(f"✅ 第 {iter_idx+1} 次迭代优化成功！")
             
-            if iter_idx == max_adapt_iters - 1:
+            # --- 这是上一轮我们讨论的提取收敛误差和更新网格的代码 ---
+            mesh_fractions_new, warm_x, warm_u, mean_error = compute_mesh_and_warmstart(sol, x, u, f_cont, mesh_fractions)
+            error_tol = 1e-3  
+            
+            # 判断是否收敛 或 达到最大迭代次数
+            if mean_error < error_tol or iter_idx == max_adapt_iters - 1:
+                if mean_error < error_tol:
+                    print(f"\n🎉 满足收敛准则，提前结束自适应迭代！")
+                else:
+                    print(f"\n⚠️ 达到最大迭代次数。")
+                    
                 print("================ 最终结果 ================")
+                
+                # 【修改处】：调用积分验证函数，传入当前的 mesh_fractions (而不是 _new)
+                compute_and_plot_integration_error(sol, x, u, f_cont, mesh_fractions)
+                
                 extract_and_plot(sol, x)
                 break
                 
-            mesh_fractions, warm_x, warm_u = compute_mesh_and_warmstart(sol, x, u, f_cont, mesh_fractions)
+            # 若没收敛，将新的网格比例赋值给下一轮
+            mesh_fractions = mesh_fractions_new
             print("新的时间段比例:", np.round(mesh_fractions, 3))
 
         except Exception as e:
