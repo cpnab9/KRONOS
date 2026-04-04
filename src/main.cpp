@@ -1,3 +1,4 @@
+// KRONOS/src/main.cpp
 #include <iostream>
 #include <iomanip>
 #include <vector>
@@ -7,12 +8,8 @@
 #include "kronos/solver/fatrop_wrapper.hpp"
 #include "kronos/utils/library_loader.hpp"
 #include "kronos/utils/interpolator.hpp"
-#include "problem_metadata.h" // 由 Python 离线生成的宏和常数
 
-// --- 物理与参考常数 ---
-const double R0 = 6378000.0;
-const double V_ref = std::sqrt(R0 * 9.81);
-const double t_ref = std::sqrt(R0 / 9.81);
+// 注意：已经彻底移除了 #include "problem_metadata.h" 和所有物理常数宏
 
 // --- 辅助函数：计算拉格朗日基函数在指定点的值与导数 ---
 void compute_lagrange_weights(int d, const std::vector<double>& tau, double tau_test, 
@@ -44,23 +41,26 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        // 1. 加载求解器和动力学函数
+        // 1. 动态加载求解器、动力学函数，以及元数据信息
         auto funcs = kronos::LibraryLoader::load(argv[1]); 
         auto f_cont = kronos::LibraryLoader::load_f_cont(argv[1]);
+        auto prob_info = kronos::LibraryLoader::load_problem_info(argv[1]);
+        
         kronos::FatropWrapper solver(funcs); 
         
-        // 2. 初始化自适应网格参数
-        const int N = KRONOS_N;
-        const int d = KRONOS_D;
-        const int nx = KRONOS_NX;
-        const int nu_base = KRONOS_NU_BASE;
-        const int nu_total = d * nx + d * nu_base; // 伪谱法下每个区间的总控制维数
+        // 2. 初始化自适应网格参数 (完全由加载的元数据驱动)
+        const int N = prob_info.N;
+        const int d = prob_info.d;
+        const int nx = prob_info.nx;
+        const int nu_base = prob_info.nu_base;
+        const int nu_total = d * nx + d * nu_base; 
+        const int tf_index = prob_info.tf_index;
         
         std::vector<double> tau = {0.0};
         std::vector<double> tau_u;
         for (int i = 0; i < d; ++i) {
-            tau.push_back(KRONOS_TAU_ROOT[i]);
-            tau_u.push_back(KRONOS_TAU_ROOT[i]);
+            tau.push_back(prob_info.tau_root[i]);
+            tau_u.push_back(prob_info.tau_root[i]);
         }
 
         // 预计算截断误差评估点 (tau = 0.5) 的插值权重
@@ -76,12 +76,8 @@ int main(int argc, char* argv[]) {
         double error_tol = 1e-3;
 
         // ==========================================
-        // 【核心修复】：为第 0 次迭代生成高质量的物理插值初值
+        // 【动态化】：为第 0 次迭代生成基于元数据的物理插值初值
         // ==========================================
-        double tf_guess = 1500.0 / t_ref;
-        std::vector<double> x0_val = {1.0 + 100000.0/R0, 0.0, 0.0, 7450.0/V_ref, -0.5*M_PI/180.0, 0.0, 0.0, 40.0*M_PI/180.0, tf_guess};
-        std::vector<double> xf_val = {1.0 + 25000.0/R0, 12.0*M_PI/180.0, 70.0*M_PI/180.0, 2000.0/V_ref, -10.0*M_PI/180.0, 90.0*M_PI/180.0, 0.0, 15.0*M_PI/180.0, tf_guess};
-
         int K_total = N + 1;
         initial_guess.clear();
         for (int k = 0; k < K_total; ++k) {
@@ -89,32 +85,33 @@ int main(int argc, char* argv[]) {
             double interp_frac = (K_total > 1) ? (double)k / (K_total - 1) : 0.0;
             std::vector<double> x_curr(nx);
             for (int i = 0; i < nx; ++i) {
-                x_curr[i] = x0_val[i] + interp_frac * (xf_val[i] - x0_val[i]);
+                x_curr[i] = prob_info.x0_guess[i] + interp_frac * (prob_info.xf_guess[i] - prob_info.x0_guess[i]);
             }
             
-            // 压入当前主节点状态
             initial_guess.insert(initial_guess.end(), x_curr.begin(), x_curr.end());
             
-            // 如果不是最后一个节点，压入内部配点状态和控制量
             if (k < K_total - 1) {
                 // 配点状态 (d个，用当前主状态占位)
                 for (int j = 0; j < d; ++j) {
                     initial_guess.insert(initial_guess.end(), x_curr.begin(), x_curr.end());
                 }
-                // 配点控制量 (d个) [sigma_rate, alpha_rate, slack_Q, slack_q, slack_n]
+                // 配点控制量 (泛化处理，默认填入安全的小正数)
                 for (int j = 0; j < d; ++j) {
-                    std::vector<double> u_guess = {0.0, 0.0, 1e-3, 1e-3, 1e-3}; 
+                    std::vector<double> u_guess(nu_base, 1e-3); 
                     initial_guess.insert(initial_guess.end(), u_guess.begin(), u_guess.end());
                 }
             }
         }
+
+        // 映射获取误差权重向量
+        Eigen::Map<Eigen::VectorXd> err_weights(prob_info.error_weights.data(), nx);
 
         // ==========================================
         // 核心自适应迭代循环
         // ==========================================
         for (int iter = 0; iter < max_adapt_iters; ++iter) {
             std::cout << "\n=============================================\n";
-            std::cout << "=== 自适应网格迭代 " << iter + 1 << "/" << max_adapt_iters << " ===\n";
+            std::cout << "=== Adaptive Mesh Iteration " << iter + 1 << "/" << max_adapt_iters << " ===\n";
             std::cout << "=============================================\n";
 
             // (1) 注入动态参数和热启动猜测值
@@ -126,7 +123,7 @@ int main(int argc, char* argv[]) {
             // (2) 执行求解
             solver.solve();
             const auto& sol = solver.get_solution();
-            double tf_opt = sol[8]; // tf 位于第一个状态的第 8 个索引
+            double tf_opt = sol[tf_index]; // 动态定位 tf 的位置
 
             // (3) 解析解并提取节点与控制历史
             std::vector<double> t_nodes_old = {0.0};
@@ -166,7 +163,7 @@ int main(int argc, char* argv[]) {
                 }
 
                 // ------------------------------------------------
-                // 误差评估: 在中点 (tau=0.5) 比较多项式导数与物理导数
+                // 误差评估: 泛化计算逻辑，利用 Python 端传入的权重
                 // ------------------------------------------------
                 Eigen::VectorXd X_poly = X_mat * p_X;
                 Eigen::VectorXd U_poly = U_c * p_U;
@@ -176,13 +173,13 @@ int main(int argc, char* argv[]) {
                     const double* arg[2] = {X_poly.data(), U_poly.data()};
                     Eigen::VectorXd f_eval(nx);
                     double* res[1] = {f_eval.data()};
-                    long long int iw = 0; double w = 0; // dummy
+                    long long int iw = 0; double w = 0; 
                     f_cont(arg, res, &iw, &w, 0);
 
                     Eigen::VectorXd defect = (dX_poly_dt - f_eval).cwiseAbs();
-                    double e_V = defect(3) * V_ref / t_ref;
-                    double e_gamma = defect(4) * 180.0 / M_PI / t_ref;
-                    errors(k) = e_V + e_gamma;
+                    
+                    // 【消除硬编码】：点乘误差权重向量并求和，取代了之前手动指定 defect(3) 和 defect(4)
+                    errors(k) = (defect.array() * err_weights.array()).sum();
                 }
                 
                 offset += nx + nu_total;
@@ -195,20 +192,18 @@ int main(int argc, char* argv[]) {
 
             double max_error = errors.maxCoeff();
             double mean_error = errors.mean();
-            std::cout << "  > 目标函数值: " << std::fixed << std::setprecision(6) << solver.get_objective() << "\n";
-            std::cout << "  > 耗时: " << solver.get_solve_time_ms() << " ms\n";
-            std::cout << "  > 平均截断误差: " << std::scientific << mean_error << "\n";
-            std::cout << "  > 最大截断误差: " << max_error << "\n";
+            std::cout << "  > Objective Function: " << std::fixed << std::setprecision(6) << solver.get_objective() << "\n";
+            std::cout << "  > Solver Time: " << solver.get_solve_time_ms() << " ms\n";
+            std::cout << "  > Mean Truncation Error: " << std::scientific << mean_error << "\n";
+            std::cout << "  > Max Truncation Error: " << max_error << "\n";
 
-            // 【新增】：NaN 安全拦截器
             if (std::isnan(mean_error)) {
-                std::cerr << "\n⚠️ 致命错误：截断误差为 NaN！求解器遇到奇点 (可能求解失败且给出了非物理结果)。\n";
+                std::cerr << "\n⚠️ Fatal Error: Truncation error is NaN! Solver encountered singularity.\n";
                 break;
             }
 
             if (mean_error < error_tol || iter == max_adapt_iters - 1) {
-                std::cout << "\n🎉 满足收敛准则，优化完成！\n";
-                // 此处可调用 CSV 导出逻辑
+                std::cout << "\n🎉 Optimization converged successfully!\n";
                 break;
             }
 
@@ -236,26 +231,23 @@ int main(int argc, char* argv[]) {
                 double dt_k = mesh_fractions[k] * tf_opt;
                 double t_k = t_nodes_new[k];
 
-                // 插入主状态节点
                 auto x_guess = interp_x(t_k);
                 initial_guess.insert(initial_guess.end(), x_guess.begin(), x_guess.end());
 
-                // 插入配点状态
                 for (int j = 1; j <= d; ++j) {
                     auto xc_guess = interp_x(t_k + tau[j] * dt_k);
                     initial_guess.insert(initial_guess.end(), xc_guess.begin(), xc_guess.end());
                 }
                 
-                // 插入控制量，并安全化松弛变量
+                // 【动态化】：不再硬编码松弛变量索引，给所有的控制分量保底 1e-4 的正值，防止计算奇点
                 for (int j = 0; j < d; ++j) {
                     auto uc_guess = interp_u(t_k + tau_u[j] * dt_k);
-                    uc_guess[2] = std::max(uc_guess[2], 1e-4); // slack_Q
-                    uc_guess[3] = std::max(uc_guess[3], 1e-4); // slack_q
-                    uc_guess[4] = std::max(uc_guess[4], 1e-4); // slack_n
+                    for (auto& u_val : uc_guess) {
+                        u_val = std::max(u_val, 1e-4);
+                    }
                     initial_guess.insert(initial_guess.end(), uc_guess.begin(), uc_guess.end());
                 }
             }
-            // 插入最后一个阶段的主状态
             auto x_final_guess = interp_x(t_nodes_new.back());
             initial_guess.insert(initial_guess.end(), x_final_guess.begin(), x_final_guess.end());
         }

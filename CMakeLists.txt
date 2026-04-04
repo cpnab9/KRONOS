@@ -26,7 +26,7 @@ list(APPEND CMAKE_PREFIX_PATH "${SOFTWARE_DIR}/fatrop" "${SOFTWARE_DIR}/Eigen3")
 include_directories(
     "${SOFTWARE_DIR}/fatrop/include"
     "${SOFTWARE_DIR}/Eigen3/include/eigen3"
-    "${SOFTWARE_DIR}/Eigen3" # 针对直接 clone 源码不编译的情况
+    "${SOFTWARE_DIR}/Eigen3" 
 )
 link_directories(
     "${SOFTWARE_DIR}/fatrop/lib" 
@@ -34,29 +34,29 @@ link_directories(
 )
 
 find_package(fatrop REQUIRED)
-
-# 尝试寻找 Eigen3 的 CMake 配置。如果不成功，因为上面已经显式包含了 include 目录，
-# 我们设为 QUIET（不强制报错），这样直接解压的源码也能工作。
 find_package(Eigen3 QUIET) 
 
 # ==========================================
-# 2. 编译生成的算例库 (Plugin) - 特殊处理
+# 2. 编译生成的算例库 (Plugin) - 动态捕获
 # ==========================================
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/nlp_code.c")
-    # 把 NLP 和 动力学导数 C 文件一起编译进动态库
-    add_library(nlp_case SHARED 
-        generated/nlp_code.c
-        generated/f_cont_code.c
-    )
-    target_link_libraries(nlp_case PRIVATE fatrop::fatrop)
-    set_target_properties(nlp_case PROPERTIES PREFIX "")
+# 【核心修改】：不再硬编码文件名，而是抓取 generated 目录下的所有 .c 文件
+file(GLOB GENERATED_C_FILES "${CMAKE_CURRENT_SOURCE_DIR}/generated/*.c")
+
+if(GENERATED_C_FILES)
+    # 将所有找到的 C 文件（nlp_code.c, f_cont_code.c, metadata.c 等）打包成 kronos_problem 动态库
+    add_library(kronos_problem SHARED ${GENERATED_C_FILES})
     
-    # 【核心】：单独给这两个容易卡死的巨型 C 文件施加 -O0 (不优化)
-    set_target_properties(nlp_case PROPERTIES COMPILE_FLAGS "-O0")
+    target_link_libraries(kronos_problem PRIVATE fatrop::fatrop)
     
-    message(STATUS "[KRONOS] Found generated NLP and f_cont files, target nlp_case configured.")
+    # 保持前缀为空，以便生成 libkronos_problem.so (或者在某些系统上直接是 kronos_problem.so)
+    set_target_properties(kronos_problem PROPERTIES PREFIX "")
+    
+    # 【重要】：单独给自动生成的巨型 C 文件施加 -O0 避免编译器内存溢出/卡死
+    set_target_properties(kronos_problem PROPERTIES COMPILE_FLAGS "-O1")
+    
+    message(STATUS "[KRONOS] Found generated problem files, target 'kronos_problem' configured.")
 else()
-    message(WARNING "[KRONOS] generated/nlp_code.c not found.")
+    message(WARNING "[KRONOS] No C files found in generated/ directory. Problem library will not be built.")
 endif()
 
 # ==========================================
@@ -68,7 +68,7 @@ add_executable(kronos_solver
 )
 target_include_directories(kronos_solver PRIVATE include generated)
 
-# 动态链接判断：如果找到了 Eigen3::Eigen target 就链接，否则由于已经是纯头文件包含，则无需链接
+# 动态链接判断：如果找到了 Eigen3::Eigen target 就链接
 if(TARGET Eigen3::Eigen)
     target_link_libraries(kronos_solver PRIVATE fatrop::fatrop Eigen3::Eigen ${CMAKE_DL_LIBS})
 else()
