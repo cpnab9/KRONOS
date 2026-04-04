@@ -33,12 +33,14 @@ public:
     FatropWrapper(const FatropWrapper&) = delete;
     FatropWrapper& operator=(const FatropWrapper&) = delete;
 
+    // 【新增】注入初值猜测 (Warm-start) 和 动态外部参数 (Mesh fractions)
+    void set_initial_guess(const std::vector<double>& x0);
+    void set_parameters(const std::vector<double>& p);
+
     void solve();
 
     double get_objective() const;
     const std::vector<double>& get_solution() const;
-    
-    // 【新增】获取求解器纯计算的耗时 (单位：毫秒)
     double get_solve_time_ms() const;
 
 private:
@@ -52,10 +54,13 @@ private:
     std::vector<casadi_int> iw_;
     std::vector<double> w_;
     
+    // 【新增】用于安全持有输入数据的内存区
+    std::vector<double> initial_guess_;
+    std::vector<double> parameters_;
+
     double obj_value_ = 0.0;          
     std::vector<double> res_buffer_; 
     
-    // 【新增】用于内部记录时间的变量
     double solve_time_ms_ = 0.0;
 };
 
