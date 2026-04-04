@@ -35,8 +35,8 @@ theta_NFZ2, phi_NFZ2, R_NFZ2 = 2.5 * np.pi / 180.0, 60.0 * np.pi / 180.0, 500000
 d = 5       
 N = 40     
 K = N + 1
-n_x = 9     # [r, theta, phi, V, gamma, psi, sigma, alpha, tf]
-n_u = 5     # [sigma_rate, alpha_rate, slack_Q, slack_q, slack_n] 
+n_x = 9     #[r, theta, phi, V, gamma, psi, sigma, alpha, tf]
+n_u = 5     #[sigma_rate, alpha_rate, slack_Q, slack_q, slack_n] 
 
 tau_root = cs.collocation_points(d, 'radau')
 tau = np.append(0, tau_root) 
@@ -90,7 +90,9 @@ def create_continuous_dynamics():
     tf_dot = 0.0  
     
     rhs = cs.vertcat(r_dot, theta_dot, phi_dot, V_dot, gamma_dot, psi_dot, sigma_dot, alpha_dot, tf_dot)
-    return cs.Function("kronos_f_cont", [states, controls], [rhs])
+    
+    # 【性能修复 1】：必须添加 .expand() 将虚构计算图平铺为标量原生计算指令！
+    return cs.Function("kronos_f_cont",[states, controls], [rhs]).expand()
 
 f_cont = create_continuous_dynamics()
 
@@ -103,10 +105,10 @@ p_mesh_fractions = opti.parameter(N)
 opti.set_value(p_mesh_fractions, np.ones(N) / N)
 
 nx_list = [n_x for _ in range(K)]
-nu_list = [d*n_x + d*n_u for _ in range(K-1)] + [0] 
+nu_list =[d*n_x + d*n_u for _ in range(K-1)] + [0] 
 ng_list = [] 
 
-x = []; u = []
+x = []; u =[]
 for k in range(K):
     x.append(opti.variable(nx_list[k]))
     u.append(opti.variable(nu_list[k]))
@@ -115,7 +117,7 @@ slack_sum_path = 0
 u_rate_sq_sum = 0
 
 for k in range(K):
-    cc = [] 
+    cc =[] 
     
     cc.append((1.0, x[k][0], 1.0 + 120000.0/R0))               
     cc.append((100.0/V_ref, x[k][3], 8000.0/V_ref))            
@@ -129,7 +131,7 @@ for k in range(K):
         dt_k = tf_var * p_mesh_fractions[k]
         
         offset_x = 0; offset_u = d * n_x
-        Xc = []; Uc = []
+        Xc = []; Uc =[]
         for j in range(d):
             Xc.append(u[k][offset_x : offset_x+n_x])
             offset_x += n_x
@@ -137,7 +139,7 @@ for k in range(K):
             Uc.append(u[k][offset_u : offset_u+n_u])
             offset_u += n_u
 
-        eqs = []
+        eqs =[]
         for j in range(1, d+1):
             dX_dt = C_mat[0, j] * x[k]
             for r in range(d):
@@ -206,7 +208,7 @@ opti.solver('fatrop', {
     'nu': nu_list, 
     'ng': ng_list, 
     'N': N, 
-    'expand': False,                       
+    'expand': True,       # 【性能修复 2】：必须设为 True！这让全局雅可比完全平铺！
     'fatrop.mu_init': 1e-2                 
 })
 
@@ -217,10 +219,11 @@ os.chdir(generated_dir)
 
 print("[*] 正在生成紧凑型 NLP 代码与连续动力学函数...")
 
-opti.to_function("kronos_nlp", 
-                 [opti.x, opti.lam_g, p_mesh_fractions],  
-                 [opti.f, opti.x, opti.lam_g]             
-                 ).generate('nlp_code.c', {"with_header": True})
+# 【性能修复 3】：同时对导出总函数增加 .expand()，确保 C++ 端运行时无虚拟机开销
+nlp_func = opti.to_function("kronos_nlp", 
+                            [opti.x, opti.lam_g, p_mesh_fractions],[opti.f, opti.x, opti.lam_g]             
+                            ).expand()
+nlp_func.generate('nlp_code.c', {"with_header": True})
 
 cg = cs.CodeGenerator('f_cont_code.c', {"with_header": True})
 cg.add(f_cont)
@@ -232,8 +235,8 @@ cg.generate()
 print("[*] 正在生成动态元数据接口 (metadata.c)...")
 tau_str = ", ".join([str(t) for t in tau_root])
 
-x0_arr = [1.0 + 100000.0/R0, 0.0, 0.0, 7450.0/V_ref, -0.5*np.pi/180.0, 0.0, 0.0, 40.0*np.pi/180.0, 1500.0/t_ref]
-xf_arr = [1.0 + 25000.0/R0, 12.0*np.pi/180.0, 70.0*np.pi/180.0, 2000.0/V_ref, -10.0*np.pi/180.0, 90.0*np.pi/180.0, 0.0, 15.0*np.pi/180.0, 1500.0/t_ref]
+x0_arr =[1.0 + 100000.0/R0, 0.0, 0.0, 7450.0/V_ref, -0.5*np.pi/180.0, 0.0, 0.0, 40.0*np.pi/180.0, 1500.0/t_ref]
+xf_arr =[1.0 + 25000.0/R0, 12.0*np.pi/180.0, 70.0*np.pi/180.0, 2000.0/V_ref, -10.0*np.pi/180.0, 90.0*np.pi/180.0, 0.0, 15.0*np.pi/180.0, 1500.0/t_ref]
 x0_str = ", ".join([str(x) for x in x0_arr])
 xf_str = ", ".join([str(x) for x in xf_arr])
 

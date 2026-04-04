@@ -6,12 +6,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ==========================================
-# 全局开启 C++ 的 Release 模式和极限优化
+# 全局开启 C 和 C++ 的 Release 模式和极限优化
 # ==========================================
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -ffast-math")
+
+# 【修改1】：同时加上 C_FLAGS_RELEASE 和 -DNDEBUG (关闭断言开销)
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -ffast-math -DNDEBUG")
+set(CMAKE_C_FLAGS_RELEASE "-O3 -march=native -ffast-math -DNDEBUG")
 
 # ==========================================
 # 1. 环境与依赖配置 (并行相对路径管理)
@@ -39,7 +42,6 @@ find_package(Eigen3 QUIET)
 # ==========================================
 # 2. 编译生成的算例库 (Plugin) - 动态捕获
 # ==========================================
-# 【核心修改】：不再硬编码文件名，而是抓取 generated 目录下的所有 .c 文件
 file(GLOB GENERATED_C_FILES "${CMAKE_CURRENT_SOURCE_DIR}/generated/*.c")
 
 if(GENERATED_C_FILES)
@@ -48,13 +50,18 @@ if(GENERATED_C_FILES)
     
     target_link_libraries(kronos_problem PRIVATE fatrop::fatrop)
     
-    # 保持前缀为空，以便生成 libkronos_problem.so (或者在某些系统上直接是 kronos_problem.so)
+    # 保持前缀为空，以便生成 libkronos_problem.so
     set_target_properties(kronos_problem PROPERTIES PREFIX "")
     
-    # 【重要】：单独给自动生成的巨型 C 文件施加 -O0 避免编译器内存溢出/卡死
-    set_target_properties(kronos_problem PROPERTIES COMPILE_FLAGS "-O0")
+    # 【修改2】：为极其庞大的生成 C 代码施加极致的数学库优化和硬件指令集优化！
+    # 警告：由于生成代码彻底展开，编译这个 target 可能会占用较高内存并耗时 1~5 分钟。
+    # 必须开启 POSITION_INDEPENDENT_CODE (fPIC) 以保证动态链接安全和效率。
+    set_target_properties(kronos_problem PROPERTIES 
+        COMPILE_FLAGS "-O3 -march=native -ffast-math -funroll-loops"
+        POSITION_INDEPENDENT_CODE ON
+    )
     
-    message(STATUS "[KRONOS] Found generated problem files, target 'kronos_problem' configured.")
+    message(STATUS "[KRONOS] Found generated problem files, target 'kronos_problem' configured with EXTREME OPTIMIZATION.")
 else()
     message(WARNING "[KRONOS] No C files found in generated/ directory. Problem library will not be built.")
 endif()
