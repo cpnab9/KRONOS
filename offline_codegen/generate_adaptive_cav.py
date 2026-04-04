@@ -1,3 +1,4 @@
+# --- START OF FILE generate_adaptive_cav.py ---
 import casadi as cs
 import numpy as np
 import os
@@ -31,8 +32,8 @@ theta_NFZ1, phi_NFZ1, R_NFZ1 = 5.0 * np.pi / 180.0, 30.0 * np.pi / 180.0, 500000
 theta_NFZ2, phi_NFZ2, R_NFZ2 = 2.5 * np.pi / 180.0, 60.0 * np.pi / 180.0, 500000.0 / R0
 
 # --- 自适应 KRONOS 配置 ---
-d = 3       
-N = 50      
+d = 5       
+N = 40     
 K = N + 1
 n_x = 9     # [r, theta, phi, V, gamma, psi, sigma, alpha, tf]
 n_u = 5     # [sigma_rate, alpha_rate, slack_Q, slack_q, slack_n] 
@@ -50,7 +51,7 @@ for j in range(d+1):
         C_mat[j,r] = dp(tau[r])
 
 # ==========================================
-# 2. 连续时间动力学 (独立函数，稍后供 C++ 导出)
+# 2. 连续时间动力学 
 # ==========================================
 def create_continuous_dynamics():
     states = cs.SX.sym('x', n_x)
@@ -201,8 +202,12 @@ for k in range(K): opti.set_initial(x[k][8], tf_guess)
 # ==========================================
 opti.solver('fatrop', {
     'structure_detection': 'manual', 
-    'nx': nx_list, 'nu': nu_list, 'ng': ng_list, 
-    'N': N, 'expand': True
+    'nx': nx_list, 
+    'nu': nu_list, 
+    'ng': ng_list, 
+    'N': N, 
+    'expand': False,                       
+    'fatrop.mu_init': 1e-2                 
 })
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -210,11 +215,11 @@ generated_dir = os.path.join(current_dir, '..', 'generated')
 os.makedirs(generated_dir, exist_ok=True)
 os.chdir(generated_dir)
 
-print("[*] 正在生成 NLP 代码与连续动力学函数...")
+print("[*] 正在生成紧凑型 NLP 代码与连续动力学函数...")
 
 opti.to_function("kronos_nlp", 
-                 [opti.x, p_mesh_fractions],  
-                 [opti.f, opti.x]             
+                 [opti.x, opti.lam_g, p_mesh_fractions],  
+                 [opti.f, opti.x, opti.lam_g]             
                  ).generate('nlp_code.c', {"with_header": True})
 
 cg = cs.CodeGenerator('f_cont_code.c', {"with_header": True})
@@ -222,18 +227,16 @@ cg.add(f_cont)
 cg.generate()
 
 # ==========================================
-# 6. 动态生成 C 接口的元数据与初值 (解决 Hard-coding)
+# 6. 动态生成 C 接口的元数据与初值
 # ==========================================
 print("[*] 正在生成动态元数据接口 (metadata.c)...")
 tau_str = ", ".join([str(t) for t in tau_root])
 
-# 定义起始终点的物理猜测值
 x0_arr = [1.0 + 100000.0/R0, 0.0, 0.0, 7450.0/V_ref, -0.5*np.pi/180.0, 0.0, 0.0, 40.0*np.pi/180.0, 1500.0/t_ref]
 xf_arr = [1.0 + 25000.0/R0, 12.0*np.pi/180.0, 70.0*np.pi/180.0, 2000.0/V_ref, -10.0*np.pi/180.0, 90.0*np.pi/180.0, 0.0, 15.0*np.pi/180.0, 1500.0/t_ref]
 x0_str = ", ".join([str(x) for x in x0_arr])
 xf_str = ", ".join([str(x) for x in xf_arr])
 
-# 误差归一化权重 (对应原有代码：索引3为速度，索引4为弹道倾角，其他给0)
 weights_arr = [0.0] * n_x
 weights_arr[3] = V_ref / t_ref
 weights_arr[4] = (180.0 / np.pi) / t_ref
@@ -242,7 +245,6 @@ weights_str = ", ".join([str(w) for w in weights_arr])
 c_metadata = f"""
 #include <stddef.h>
 
-// 1. 导出维度信息
 void kronos_get_dimensions(int* nx, int* nu_base, int* d, int* N, int* tf_index) {{
     if(nx) *nx = {n_x};
     if(nu_base) *nu_base = {n_u};
@@ -251,7 +253,6 @@ void kronos_get_dimensions(int* nx, int* nu_base, int* d, int* N, int* tf_index)
     if(tf_index) *tf_index = 8;
 }}
 
-// 2. 导出配点时间分布
 void kronos_get_tau_root(double* tau) {{
     double temp[] = {{{tau_str}}};
     for(int i=0; i<{d}; ++i) {{
@@ -259,7 +260,6 @@ void kronos_get_tau_root(double* tau) {{
     }}
 }}
 
-// 3. 导出热启动起始终点猜测值 (消除 C++ 里的硬编码启发式)
 void kronos_get_boundaries(double* x0, double* xf) {{
     double temp_x0[] = {{{x0_str}}};
     double temp_xf[] = {{{xf_str}}};
@@ -269,7 +269,6 @@ void kronos_get_boundaries(double* x0, double* xf) {{
     }}
 }}
 
-// 4. 导出截断误差评估的权重 (消除 C++ 里的指定索引硬编码)
 void kronos_get_error_weights(double* weights) {{
     double temp_w[] = {{{weights_str}}};
     for(int i=0; i<{n_x}; ++i) {{
@@ -283,3 +282,4 @@ with open('metadata.c', 'w') as f:
 
 os.chdir(current_dir)
 print(f"✅ 自适应网格生成成功！包含动态元数据接口，输出目录: {generated_dir}")
+# --- END OF FILE generate_adaptive_cav.py ---

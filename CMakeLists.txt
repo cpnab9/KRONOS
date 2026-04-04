@@ -52,7 +52,7 @@ if(GENERATED_C_FILES)
     set_target_properties(kronos_problem PROPERTIES PREFIX "")
     
     # 【重要】：单独给自动生成的巨型 C 文件施加 -O0 避免编译器内存溢出/卡死
-    set_target_properties(kronos_problem PROPERTIES COMPILE_FLAGS "-O1")
+    set_target_properties(kronos_problem PROPERTIES COMPILE_FLAGS "-O0")
     
     message(STATUS "[KRONOS] Found generated problem files, target 'kronos_problem' configured.")
 else()

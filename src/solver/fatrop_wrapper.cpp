@@ -12,15 +12,23 @@ FatropWrapper::FatropWrapper(const CasadiSolverFunctions& funcs) : funcs_(funcs)
     iw_.resize(sz_iw_, 0);
     w_.resize(sz_w_, 0.0);
 
+    // 0: Objective value
     if (sz_res_ > 0) {
         res_[0] = &obj_value_;
     }
 
+    // 1: Primal solution (x)
     if (sz_res_ > 1) {
         const casadi_int* sp_x = funcs_.sparsity_out(1); 
-        casadi_int nrow_x = sp_x[0]; 
-        res_buffer_.resize(nrow_x, 0.0);
+        res_buffer_.resize(sp_x[0], 0.0);
         res_[1] = res_buffer_.data();
+    }
+    
+    // 2: Dual solution (lam_g)
+    if (sz_res_ > 2) {
+        const casadi_int* sp_lam_g = funcs_.sparsity_out(2); 
+        res_lam_g_.resize(sp_lam_g[0], 0.0);
+        res_[2] = res_lam_g_.data();
     }
 
     funcs_.incref();
@@ -36,28 +44,31 @@ FatropWrapper::~FatropWrapper() {
     }
 }
 
-// 【新增】设置初始猜测值 (映射到 arg[0])
-void FatropWrapper::set_initial_guess(const std::vector<double>& x0) {
-    if (x0.empty()) return;
-    initial_guess_ = x0; 
-    if (sz_arg_ > 0) {
-        arg_[0] = initial_guess_.data(); 
+void FatropWrapper::set_initial_guess(const std::vector<double>& x0, 
+                                      const std::vector<double>& lam_g0) {
+    if (!x0.empty()) {
+        initial_guess_ = x0; 
+        if (sz_arg_ > 0) arg_[0] = initial_guess_.data(); 
+    }
+    if (!lam_g0.empty()) {
+        lam_g_guess_ = lam_g0; 
+        if (sz_arg_ > 1) arg_[1] = lam_g_guess_.data(); 
     }
 }
 
-// 【新增】设置外部参数 (映射到 arg[1])
 void FatropWrapper::set_parameters(const std::vector<double>& p) {
-    if (p.empty()) return;
-    parameters_ = p;
-    if (sz_arg_ > 1) {
-        arg_[1] = parameters_.data();
+    if (!p.empty()) {
+        parameters_ = p;
+        // 核心修正：由于 lam_x 被移除，动态网格参数的索引前移到 2
+        if (sz_arg_ > 2) {
+            arg_[2] = parameters_.data();
+        }
     }
 }
 
 void FatropWrapper::solve() {
     auto start_time = std::chrono::high_resolution_clock::now();
     
-    // 调用生成的纯 C 函数，此时内部会读取被赋值的 arg_[0] 和 arg_[1]
     if (funcs_.eval(arg_.data(), res_.data(), iw_.data(), w_.data(), mem_)) {
         throw std::runtime_error("Fatrop solver returned an error during execution.");
     }
@@ -72,6 +83,10 @@ double FatropWrapper::get_objective() const {
 
 const std::vector<double>& FatropWrapper::get_solution() const {
     return res_buffer_;
+}
+
+const std::vector<double>& FatropWrapper::get_lam_g() const {
+    return res_lam_g_;
 }
 
 double FatropWrapper::get_solve_time_ms() const {

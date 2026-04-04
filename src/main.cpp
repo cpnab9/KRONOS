@@ -9,8 +9,6 @@
 #include "kronos/utils/library_loader.hpp"
 #include "kronos/utils/interpolator.hpp"
 
-// 注意：已经彻底移除了 #include "problem_metadata.h" 和所有物理常数宏
-
 // --- 辅助函数：计算拉格朗日基函数在指定点的值与导数 ---
 void compute_lagrange_weights(int d, const std::vector<double>& tau, double tau_test, 
                               Eigen::VectorXd& p, Eigen::VectorXd& dp) {
@@ -72,16 +70,13 @@ int main(int argc, char* argv[]) {
         std::vector<double> mesh_fractions(N, 1.0 / N);
         std::vector<double> initial_guess;
 
-        int max_adapt_iters = 10;
+        int max_adapt_iters = 1;
         double error_tol = 1e-3;
 
-        // ==========================================
-        // 【动态化】：为第 0 次迭代生成基于元数据的物理插值初值
-        // ==========================================
+        // 为第 0 次迭代生成基于元数据的物理插值初值
         int K_total = N + 1;
         initial_guess.clear();
         for (int k = 0; k < K_total; ++k) {
-            // 在起始终点之间线性插值作为粗糙初始猜测
             double interp_frac = (K_total > 1) ? (double)k / (K_total - 1) : 0.0;
             std::vector<double> x_curr(nx);
             for (int i = 0; i < nx; ++i) {
@@ -91,11 +86,9 @@ int main(int argc, char* argv[]) {
             initial_guess.insert(initial_guess.end(), x_curr.begin(), x_curr.end());
             
             if (k < K_total - 1) {
-                // 配点状态 (d个，用当前主状态占位)
                 for (int j = 0; j < d; ++j) {
                     initial_guess.insert(initial_guess.end(), x_curr.begin(), x_curr.end());
                 }
-                // 配点控制量 (泛化处理，默认填入安全的小正数)
                 for (int j = 0; j < d; ++j) {
                     std::vector<double> u_guess(nu_base, 1e-3); 
                     initial_guess.insert(initial_guess.end(), u_guess.begin(), u_guess.end());
@@ -103,27 +96,33 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // 映射获取误差权重向量
         Eigen::Map<Eigen::VectorXd> err_weights(prob_info.error_weights.data(), nx);
 
         // ==========================================
         // 核心自适应迭代循环
         // ==========================================
+        // 持久化当前求解的拉格朗日乘子，实现高速热启动
+        std::vector<double> current_lam_g;
+        
         for (int iter = 0; iter < max_adapt_iters; ++iter) {
             std::cout << "\n=============================================\n";
             std::cout << "=== Adaptive Mesh Iteration " << iter + 1 << "/" << max_adapt_iters << " ===\n";
             std::cout << "=============================================\n";
 
-            // (1) 注入动态参数和热启动猜测值
+            // (1) 注入动态参数和热启动猜测值 (仅原变量和 lam_g)
             solver.set_parameters(mesh_fractions);
             if (!initial_guess.empty()) {
-                solver.set_initial_guess(initial_guess);
+                solver.set_initial_guess(initial_guess, current_lam_g);
             }
 
             // (2) 执行求解
             solver.solve();
+            
+            // 提取当前的对偶乘子并缓存，供下一次网格迭代无缝热启动使用
             const auto& sol = solver.get_solution();
-            double tf_opt = sol[tf_index]; // 动态定位 tf 的位置
+            current_lam_g = solver.get_lam_g();
+            
+            double tf_opt = sol[tf_index]; 
 
             // (3) 解析解并提取节点与控制历史
             std::vector<double> t_nodes_old = {0.0};
@@ -139,7 +138,6 @@ int main(int argc, char* argv[]) {
             for (int k = 0; k < N; ++k) {
                 double dt_k = mesh_fractions[k] * tf_opt;
                 
-                // 使用 Eigen 映射解向量 (零拷贝)
                 Eigen::Map<const Eigen::VectorXd> x_k(sol.data() + offset, nx);
                 Eigen::Map<const Eigen::MatrixXd> X_c(sol.data() + offset + nx, nx, d);
                 Eigen::Map<const Eigen::MatrixXd> U_c(sol.data() + offset + nx + d * nx, nu_base, d);
@@ -148,7 +146,6 @@ int main(int argc, char* argv[]) {
                 X_mat.col(0) = x_k;
                 X_mat.rightCols(d) = X_c;
 
-                // 记录用于插值的稠密轨迹
                 t_x_old.push_back(t_nodes_old[k]);
                 x_old.push_back(std::vector<double>(x_k.data(), x_k.data() + nx));
                 
@@ -162,9 +159,6 @@ int main(int argc, char* argv[]) {
                     u_old.push_back(std::vector<double>(U_cj.data(), U_cj.data() + nu_base));
                 }
 
-                // ------------------------------------------------
-                // 误差评估: 泛化计算逻辑，利用 Python 端传入的权重
-                // ------------------------------------------------
                 Eigen::VectorXd X_poly = X_mat * p_X;
                 Eigen::VectorXd U_poly = U_c * p_U;
                 Eigen::VectorXd dX_poly_dt = (X_mat * dp_X) / dt_k;
@@ -177,15 +171,12 @@ int main(int argc, char* argv[]) {
                     f_cont(arg, res, &iw, &w, 0);
 
                     Eigen::VectorXd defect = (dX_poly_dt - f_eval).cwiseAbs();
-                    
-                    // 【消除硬编码】：点乘误差权重向量并求和，取代了之前手动指定 defect(3) 和 defect(4)
                     errors(k) = (defect.array() * err_weights.array()).sum();
                 }
                 
                 offset += nx + nu_total;
             }
             
-            // 补齐最后一个状态点
             Eigen::Map<const Eigen::VectorXd> x_final(sol.data() + offset, nx);
             t_x_old.push_back(t_nodes_old.back());
             x_old.push_back(std::vector<double>(x_final.data(), x_final.data() + nx));
@@ -222,7 +213,7 @@ int main(int argc, char* argv[]) {
                 t_nodes_new.push_back(t_nodes_new.back() + mesh_fractions[k] * tf_opt);
             }
 
-            // (5) 热启动插值 (Warm-start Generation)
+            // (5) 热启动插值
             kronos::Interpolator1D interp_x(t_x_old, x_old);
             kronos::Interpolator1D interp_u(t_u_old, u_old);
 
@@ -239,7 +230,6 @@ int main(int argc, char* argv[]) {
                     initial_guess.insert(initial_guess.end(), xc_guess.begin(), xc_guess.end());
                 }
                 
-                // 【动态化】：不再硬编码松弛变量索引，给所有的控制分量保底 1e-4 的正值，防止计算奇点
                 for (int j = 0; j < d; ++j) {
                     auto uc_guess = interp_u(t_k + tau_u[j] * dt_k);
                     for (auto& u_val : uc_guess) {
