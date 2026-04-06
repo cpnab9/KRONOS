@@ -1,30 +1,31 @@
 #pragma once
-#include <memory>
-#include <fatrop/fatrop.hpp>
 #include "ocp/flight_ocp.hpp"
+#include <fatrop/fatrop.hpp>
+#include <memory>
+#include <vector>
+#include <string>
 
 namespace aeroplan {
 
 class TrajectoryPlanner {
 public:
-    TrajectoryPlanner();
+    // 接受 JSON 配置文件路径作为启动参数
+    TrajectoryPlanner(const std::string& config_file);
     
-    // 显式传入配置初始化（解耦物理问题与求解器）
-    void initialize(const OCPConfig& config);
-    
-    // 带状态反馈的在线闭环规划
+    bool plan();
     bool plan(const std::vector<double>& current_state);
 
-    // 空载测试规划
-    bool plan();
-
 private:
+    // 初始化并构建求解器
+    void initialize(const std::string& config_file);
+
+    // 从 JSON 文件反序列化配置的内部函数
+    OCPConfig load_config(const std::string& filepath);
+
     OCPConfig current_config_;
     std::shared_ptr<FlightOCP> ocp_problem_;
-    std::shared_ptr<fatrop::IpAlgorithm<fatrop::OcpType>> solver_;
     std::shared_ptr<fatrop::IpAlgBuilder<fatrop::OcpType>> builder_;
-    
-    OCPConfig create_default_config();
+    std::shared_ptr<fatrop::IpAlgorithm<fatrop::OcpType>> solver_;
 };
 
 } // namespace aeroplan

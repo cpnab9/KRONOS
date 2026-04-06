@@ -1,47 +1,53 @@
 #include "planner/trajectory_planner.hpp"
 #include <iostream>
-#include <vector>
+#include <fstream>
+#include <stdexcept>
+#include <nlohmann/json.hpp> // 引入 JSON 解析库
 
 namespace aeroplan {
 
-TrajectoryPlanner::TrajectoryPlanner() {
-    initialize(create_default_config());
+using json = nlohmann::json;
+
+TrajectoryPlanner::TrajectoryPlanner(const std::string& config_file) {
+    initialize(config_file);
 }
 
-OCPConfig TrajectoryPlanner::create_default_config() {
+OCPConfig TrajectoryPlanner::load_config(const std::string& filepath) {
+    std::ifstream f(filepath);
+    if (!f.is_open()) {
+        throw std::runtime_error("无法打开配置文件: " + filepath);
+    }
+    json j;
+    f >> j;
+
     OCPConfig cfg;
-    cfg.K_intervals = 100;
-    cfg.nx = 5;       // 状态: [x, y, vx, vy, cost]
-    cfg.nu = 21;      // 控制: d*nx + d*nu_real = 15 + 6 = 21
-    cfg.ng_defects = 15;
-    cfg.ng_ineq = 6;  // 三个内部配点上的 [fx, fy] 边界
-
-    // 初始状态约束 (x=0, y=0, vx=0, vy=0, cost=0)
-    cfg.init_idx = {0, 1, 2, 3, 4};
-    cfg.init_val = {0.0, 0.0, 0.0, 0.0, 0.0};
-
-    // 【核心修复 1】终端状态约束：摒弃误导性注释，对齐原算例的真实代码要求！
-    cfg.term_idx = {0, 1, 2, 3};
-    cfg.term_val = {1.0, 2.0, 3.0, 4.0};
-
-    // 对 d=3 的三个配点的控制分量 fx, fy 分别施加边界
-    cfg.ineq_lower = {-50.0, -100.0, -50.0, -100.0, -50.0, -100.0};
-    cfg.ineq_upper = { 50.0,  100.0,  50.0,  100.0,  50.0,  100.0};
-
-    // 目标函数：最小化终端的 cost 状态 (索引为4)
-    cfg.obj_state_idx = 4; 
+    cfg.problem_name = j.value("problem_name", "Unknown Problem");
+    cfg.K_intervals = j.at("K_intervals").get<int>();
+    cfg.nx = j.at("nx").get<int>();
+    cfg.nu = j.at("nu").get<int>();
+    cfg.ng_defects = j.at("ng_defects").get<int>();
+    cfg.ng_ineq = j.at("ng_ineq").get<int>();
     
-    // 【核心修复 2】目标函数量纲对齐：补偿积分引入的 dt (0.05)
-    cfg.obj_weight = 20.0; // 1.0 / 0.05
-
-    cfg.guess_xk = {0.0, 0.0, 0.0, 0.0, 0.0};
-    cfg.guess_uk = std::vector<double>(cfg.nu, 0.0);
+    cfg.init_idx = j.at("init_idx").get<std::vector<int>>();
+    cfg.init_val = j.at("init_val").get<std::vector<double>>();
+    cfg.term_idx = j.at("term_idx").get<std::vector<int>>();
+    cfg.term_val = j.at("term_val").get<std::vector<double>>();
+    
+    cfg.ineq_lower = j.at("ineq_lower").get<std::vector<double>>();
+    cfg.ineq_upper = j.at("ineq_upper").get<std::vector<double>>();
+    
+    cfg.obj_state_idx = j.at("obj_state_idx").get<int>();
+    cfg.obj_weight = j.at("obj_weight").get<double>();
+    
+    cfg.guess_xk = j.at("guess_xk").get<std::vector<double>>();
+    cfg.guess_uk = j.at("guess_uk").get<std::vector<double>>();
 
     return cfg;
 }
 
-void TrajectoryPlanner::initialize(const OCPConfig& config) {
-    current_config_ = config;
+void TrajectoryPlanner::initialize(const std::string& config_file) {
+    std::cout << "正在加载配置文件: " << config_file << std::endl;
+    current_config_ = load_config(config_file);
     
     ocp_problem_ = std::make_shared<FlightOCP>(current_config_);
     auto nlp_wrapper = std::make_shared<fatrop::NlpOcp>(ocp_problem_);
@@ -58,13 +64,14 @@ bool TrajectoryPlanner::plan(const std::vector<double>& current_state) {
 }
 
 bool TrajectoryPlanner::plan() {
+    std::cout << "\n>>> KRONOS 通用引擎就绪 | 运行问题: [" << current_config_.problem_name << "] <<<" << std::endl;
     fatrop::Timer timer;
     timer.start();
     
     fatrop::IpSolverReturnFlag ret = solver_->optimize();
     
     std::cout << "\n======================================" << std::endl;
-    std::cout << "  Fatrop (KRONOS 伪谱法) 求解时间: " << timer.stop() << " ms" << std::endl;
+    std::cout << "  Fatrop 求解时间: " << timer.stop() << " ms" << std::endl;
     std::cout << "  求解状态: " << (ret == fatrop::IpSolverReturnFlag::Success ? "成功" : "失败") << std::endl;
     std::cout << "======================================\n" << std::endl;
     

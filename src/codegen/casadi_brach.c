@@ -15,7 +15,7 @@ extern "C" {
   #define _CASADI_NAMESPACE_CONCAT(NS, ID) NS ## ID
   #define CASADI_PREFIX(ID) CASADI_NAMESPACE_CONCAT(CODEGEN_PREFIX, ID)
 #else
-  #define CASADI_PREFIX(ID) casadi_codegen_ ## ID
+  #define CASADI_PREFIX(ID) casadi_brach_ ## ID
 #endif
 
 #include <math.h>
@@ -67,7 +67,7 @@ static const casadi_int casadi_s4[3] = {19, 4, 1};
 static const casadi_int casadi_s5[3] = {19, 12, 1};
 static const casadi_int casadi_s6[3] = {19, 19, 1};
 
-/* eval_f_dyn:(i0[4],i1[15])->(o0[4]) */
+/* brach_eval_f_dyn:(i0[4],i1[15])->(o0[4]) */
 static int casadi_f0(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem) {
   casadi_real a0;
   a0=arg[1]? arg[1][8] : 0;
@@ -81,45 +81,45 @@ static int casadi_f0(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_f_dyn(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
+CASADI_SYMBOL_EXPORT int brach_eval_f_dyn(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
   return casadi_f0(arg, res, iw, w, mem);
 }
 
-CASADI_SYMBOL_EXPORT int eval_f_dyn_alloc_mem(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_f_dyn_alloc_mem(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_f_dyn_init_mem(int mem) {
+CASADI_SYMBOL_EXPORT int brach_eval_f_dyn_init_mem(int mem) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_f_dyn_free_mem(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_f_dyn_free_mem(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT int eval_f_dyn_checkout(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_f_dyn_checkout(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_f_dyn_release(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_f_dyn_release(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_f_dyn_incref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_f_dyn_incref(void) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_f_dyn_decref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_f_dyn_decref(void) {
 }
 
-CASADI_SYMBOL_EXPORT casadi_int eval_f_dyn_n_in(void) { return 2;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_f_dyn_n_in(void) { return 2;}
 
-CASADI_SYMBOL_EXPORT casadi_int eval_f_dyn_n_out(void) { return 1;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_f_dyn_n_out(void) { return 1;}
 
-CASADI_SYMBOL_EXPORT casadi_real eval_f_dyn_default_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT casadi_real brach_eval_f_dyn_default_in(casadi_int i) {
   switch (i) {
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_f_dyn_name_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_f_dyn_name_in(casadi_int i) {
   switch (i) {
     case 0: return "i0";
     case 1: return "i1";
@@ -127,14 +127,14 @@ CASADI_SYMBOL_EXPORT const char* eval_f_dyn_name_in(casadi_int i) {
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_f_dyn_name_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_f_dyn_name_out(casadi_int i) {
   switch (i) {
     case 0: return "o0";
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_f_dyn_sparsity_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_f_dyn_sparsity_in(casadi_int i) {
   switch (i) {
     case 0: return casadi_s0;
     case 1: return casadi_s1;
@@ -142,14 +142,14 @@ CASADI_SYMBOL_EXPORT const casadi_int* eval_f_dyn_sparsity_in(casadi_int i) {
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_f_dyn_sparsity_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_f_dyn_sparsity_out(casadi_int i) {
   switch (i) {
     case 0: return casadi_s0;
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT int eval_f_dyn_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_f_dyn_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 2;
   if (sz_res) *sz_res = 1;
   if (sz_iw) *sz_iw = 0;
@@ -157,7 +157,7 @@ CASADI_SYMBOL_EXPORT int eval_f_dyn_work(casadi_int *sz_arg, casadi_int* sz_res,
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_f_dyn_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_f_dyn_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 2*sizeof(const casadi_real*);
   if (sz_res) *sz_res = 1*sizeof(casadi_real*);
   if (sz_iw) *sz_iw = 0*sizeof(casadi_int);
@@ -165,13 +165,13 @@ CASADI_SYMBOL_EXPORT int eval_f_dyn_work_bytes(casadi_int *sz_arg, casadi_int* s
   return 0;
 }
 
-/* eval_g_eq:(i0[4],i1[15])->(o0[12]) */
+/* brach_eval_g_eq:(i0[4],i1[15])->(o0[12]) */
 static int casadi_f1(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem) {
   casadi_real a00, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10, a11;
   casadi_real a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23;
   casadi_real a24, a25;
   a00=arg[0]? arg[0][3] : 0;
-  a01=50.;
+  a01=20.;
   a01=(a00/a01);
   a02=arg[1]? arg[1][2] : 0;
   a03=arg[1]? arg[1][12] : 0;
@@ -342,45 +342,45 @@ static int casadi_f1(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_g_eq(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
+CASADI_SYMBOL_EXPORT int brach_eval_g_eq(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
   return casadi_f1(arg, res, iw, w, mem);
 }
 
-CASADI_SYMBOL_EXPORT int eval_g_eq_alloc_mem(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_g_eq_alloc_mem(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_g_eq_init_mem(int mem) {
+CASADI_SYMBOL_EXPORT int brach_eval_g_eq_init_mem(int mem) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_g_eq_free_mem(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_g_eq_free_mem(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT int eval_g_eq_checkout(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_g_eq_checkout(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_g_eq_release(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_g_eq_release(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_g_eq_incref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_g_eq_incref(void) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_g_eq_decref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_g_eq_decref(void) {
 }
 
-CASADI_SYMBOL_EXPORT casadi_int eval_g_eq_n_in(void) { return 2;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_g_eq_n_in(void) { return 2;}
 
-CASADI_SYMBOL_EXPORT casadi_int eval_g_eq_n_out(void) { return 1;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_g_eq_n_out(void) { return 1;}
 
-CASADI_SYMBOL_EXPORT casadi_real eval_g_eq_default_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT casadi_real brach_eval_g_eq_default_in(casadi_int i) {
   switch (i) {
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_g_eq_name_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_g_eq_name_in(casadi_int i) {
   switch (i) {
     case 0: return "i0";
     case 1: return "i1";
@@ -388,14 +388,14 @@ CASADI_SYMBOL_EXPORT const char* eval_g_eq_name_in(casadi_int i) {
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_g_eq_name_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_g_eq_name_out(casadi_int i) {
   switch (i) {
     case 0: return "o0";
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_g_eq_sparsity_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_g_eq_sparsity_in(casadi_int i) {
   switch (i) {
     case 0: return casadi_s0;
     case 1: return casadi_s1;
@@ -403,14 +403,14 @@ CASADI_SYMBOL_EXPORT const casadi_int* eval_g_eq_sparsity_in(casadi_int i) {
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_g_eq_sparsity_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_g_eq_sparsity_out(casadi_int i) {
   switch (i) {
     case 0: return casadi_s2;
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT int eval_g_eq_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_g_eq_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 2;
   if (sz_res) *sz_res = 1;
   if (sz_iw) *sz_iw = 0;
@@ -418,7 +418,7 @@ CASADI_SYMBOL_EXPORT int eval_g_eq_work(casadi_int *sz_arg, casadi_int* sz_res, 
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_g_eq_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_g_eq_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 2*sizeof(const casadi_real*);
   if (sz_res) *sz_res = 1*sizeof(casadi_real*);
   if (sz_iw) *sz_iw = 0*sizeof(casadi_int);
@@ -426,7 +426,7 @@ CASADI_SYMBOL_EXPORT int eval_g_eq_work_bytes(casadi_int *sz_arg, casadi_int* sz
   return 0;
 }
 
-/* eval_g_ineq:(i0[4],i1[15])->(o0[19]) */
+/* brach_eval_g_ineq:(i0[4],i1[15])->(o0[19]) */
 static int casadi_f2(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem) {
   casadi_real a0;
   a0=arg[0]? arg[0][0] : 0;
@@ -470,45 +470,45 @@ static int casadi_f2(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_g_ineq(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
+CASADI_SYMBOL_EXPORT int brach_eval_g_ineq(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
   return casadi_f2(arg, res, iw, w, mem);
 }
 
-CASADI_SYMBOL_EXPORT int eval_g_ineq_alloc_mem(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_g_ineq_alloc_mem(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_g_ineq_init_mem(int mem) {
+CASADI_SYMBOL_EXPORT int brach_eval_g_ineq_init_mem(int mem) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_g_ineq_free_mem(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_g_ineq_free_mem(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT int eval_g_ineq_checkout(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_g_ineq_checkout(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_g_ineq_release(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_g_ineq_release(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_g_ineq_incref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_g_ineq_incref(void) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_g_ineq_decref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_g_ineq_decref(void) {
 }
 
-CASADI_SYMBOL_EXPORT casadi_int eval_g_ineq_n_in(void) { return 2;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_g_ineq_n_in(void) { return 2;}
 
-CASADI_SYMBOL_EXPORT casadi_int eval_g_ineq_n_out(void) { return 1;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_g_ineq_n_out(void) { return 1;}
 
-CASADI_SYMBOL_EXPORT casadi_real eval_g_ineq_default_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT casadi_real brach_eval_g_ineq_default_in(casadi_int i) {
   switch (i) {
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_g_ineq_name_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_g_ineq_name_in(casadi_int i) {
   switch (i) {
     case 0: return "i0";
     case 1: return "i1";
@@ -516,14 +516,14 @@ CASADI_SYMBOL_EXPORT const char* eval_g_ineq_name_in(casadi_int i) {
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_g_ineq_name_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_g_ineq_name_out(casadi_int i) {
   switch (i) {
     case 0: return "o0";
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_g_ineq_sparsity_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_g_ineq_sparsity_in(casadi_int i) {
   switch (i) {
     case 0: return casadi_s0;
     case 1: return casadi_s1;
@@ -531,14 +531,14 @@ CASADI_SYMBOL_EXPORT const casadi_int* eval_g_ineq_sparsity_in(casadi_int i) {
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_g_ineq_sparsity_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_g_ineq_sparsity_out(casadi_int i) {
   switch (i) {
     case 0: return casadi_s3;
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT int eval_g_ineq_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_g_ineq_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 2;
   if (sz_res) *sz_res = 1;
   if (sz_iw) *sz_iw = 0;
@@ -546,7 +546,7 @@ CASADI_SYMBOL_EXPORT int eval_g_ineq_work(casadi_int *sz_arg, casadi_int* sz_res
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_g_ineq_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_g_ineq_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 2*sizeof(const casadi_real*);
   if (sz_res) *sz_res = 1*sizeof(casadi_real*);
   if (sz_iw) *sz_iw = 0*sizeof(casadi_int);
@@ -554,7 +554,7 @@ CASADI_SYMBOL_EXPORT int eval_g_ineq_work_bytes(casadi_int *sz_arg, casadi_int* 
   return 0;
 }
 
-/* eval_J_BAbt:(i0[4],i1[15])->(o0[19x4]) */
+/* brach_eval_J_BAbt:(i0[4],i1[15])->(o0[19x4]) */
 static int casadi_f3(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem) {
   casadi_real a0, a1;
   a0=0.;
@@ -638,45 +638,45 @@ static int casadi_f3(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_BAbt(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
+CASADI_SYMBOL_EXPORT int brach_eval_J_BAbt(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
   return casadi_f3(arg, res, iw, w, mem);
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_BAbt_alloc_mem(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_BAbt_alloc_mem(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_BAbt_init_mem(int mem) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_BAbt_init_mem(int mem) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_J_BAbt_free_mem(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_J_BAbt_free_mem(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_BAbt_checkout(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_BAbt_checkout(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_J_BAbt_release(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_J_BAbt_release(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_J_BAbt_incref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_J_BAbt_incref(void) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_J_BAbt_decref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_J_BAbt_decref(void) {
 }
 
-CASADI_SYMBOL_EXPORT casadi_int eval_J_BAbt_n_in(void) { return 2;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_J_BAbt_n_in(void) { return 2;}
 
-CASADI_SYMBOL_EXPORT casadi_int eval_J_BAbt_n_out(void) { return 1;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_J_BAbt_n_out(void) { return 1;}
 
-CASADI_SYMBOL_EXPORT casadi_real eval_J_BAbt_default_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT casadi_real brach_eval_J_BAbt_default_in(casadi_int i) {
   switch (i) {
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_J_BAbt_name_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_J_BAbt_name_in(casadi_int i) {
   switch (i) {
     case 0: return "i0";
     case 1: return "i1";
@@ -684,14 +684,14 @@ CASADI_SYMBOL_EXPORT const char* eval_J_BAbt_name_in(casadi_int i) {
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_J_BAbt_name_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_J_BAbt_name_out(casadi_int i) {
   switch (i) {
     case 0: return "o0";
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_J_BAbt_sparsity_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_J_BAbt_sparsity_in(casadi_int i) {
   switch (i) {
     case 0: return casadi_s0;
     case 1: return casadi_s1;
@@ -699,14 +699,14 @@ CASADI_SYMBOL_EXPORT const casadi_int* eval_J_BAbt_sparsity_in(casadi_int i) {
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_J_BAbt_sparsity_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_J_BAbt_sparsity_out(casadi_int i) {
   switch (i) {
     case 0: return casadi_s4;
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_BAbt_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_BAbt_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 2;
   if (sz_res) *sz_res = 1;
   if (sz_iw) *sz_iw = 0;
@@ -714,7 +714,7 @@ CASADI_SYMBOL_EXPORT int eval_J_BAbt_work(casadi_int *sz_arg, casadi_int* sz_res
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_BAbt_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_BAbt_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 2*sizeof(const casadi_real*);
   if (sz_res) *sz_res = 1*sizeof(casadi_real*);
   if (sz_iw) *sz_iw = 0*sizeof(casadi_int);
@@ -722,7 +722,7 @@ CASADI_SYMBOL_EXPORT int eval_J_BAbt_work_bytes(casadi_int *sz_arg, casadi_int* 
   return 0;
 }
 
-/* eval_J_Ggt:(i0[4],i1[15])->(o0[19x12]) */
+/* brach_eval_J_Ggt:(i0[4],i1[15])->(o0[19x12]) */
 static int casadi_f4(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem) {
   casadi_real a00, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10, a11;
   a00=-3.2247448713915867e+00;
@@ -730,7 +730,7 @@ static int casadi_f4(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   a01=0.;
   if (res[0]!=0) res[0][1]=a01;
   a02=arg[0]? arg[0][3] : 0;
-  a03=50.;
+  a03=20.;
   a02=(a02/a03);
   a03=arg[1]? arg[1][12] : 0;
   a04=cos(a03);
@@ -759,7 +759,7 @@ static int casadi_f4(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   if (res[0]!=0) res[0][15]=a08;
   if (res[0]!=0) res[0][16]=a01;
   if (res[0]!=0) res[0][17]=a01;
-  a09=2.0000000000000000e-02;
+  a09=5.0000000000000003e-02;
   a04=(a07*a04);
   a04=(a09*a04);
   if (res[0]!=0) res[0][18]=a04;
@@ -1043,45 +1043,45 @@ static int casadi_f4(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_Ggt(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
+CASADI_SYMBOL_EXPORT int brach_eval_J_Ggt(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
   return casadi_f4(arg, res, iw, w, mem);
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_Ggt_alloc_mem(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_Ggt_alloc_mem(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_Ggt_init_mem(int mem) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_Ggt_init_mem(int mem) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_J_Ggt_free_mem(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_J_Ggt_free_mem(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_Ggt_checkout(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_Ggt_checkout(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_J_Ggt_release(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_J_Ggt_release(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_J_Ggt_incref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_J_Ggt_incref(void) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_J_Ggt_decref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_J_Ggt_decref(void) {
 }
 
-CASADI_SYMBOL_EXPORT casadi_int eval_J_Ggt_n_in(void) { return 2;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_J_Ggt_n_in(void) { return 2;}
 
-CASADI_SYMBOL_EXPORT casadi_int eval_J_Ggt_n_out(void) { return 1;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_J_Ggt_n_out(void) { return 1;}
 
-CASADI_SYMBOL_EXPORT casadi_real eval_J_Ggt_default_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT casadi_real brach_eval_J_Ggt_default_in(casadi_int i) {
   switch (i) {
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_J_Ggt_name_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_J_Ggt_name_in(casadi_int i) {
   switch (i) {
     case 0: return "i0";
     case 1: return "i1";
@@ -1089,14 +1089,14 @@ CASADI_SYMBOL_EXPORT const char* eval_J_Ggt_name_in(casadi_int i) {
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_J_Ggt_name_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_J_Ggt_name_out(casadi_int i) {
   switch (i) {
     case 0: return "o0";
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_J_Ggt_sparsity_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_J_Ggt_sparsity_in(casadi_int i) {
   switch (i) {
     case 0: return casadi_s0;
     case 1: return casadi_s1;
@@ -1104,14 +1104,14 @@ CASADI_SYMBOL_EXPORT const casadi_int* eval_J_Ggt_sparsity_in(casadi_int i) {
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_J_Ggt_sparsity_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_J_Ggt_sparsity_out(casadi_int i) {
   switch (i) {
     case 0: return casadi_s5;
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_Ggt_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_Ggt_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 2;
   if (sz_res) *sz_res = 1;
   if (sz_iw) *sz_iw = 0;
@@ -1119,7 +1119,7 @@ CASADI_SYMBOL_EXPORT int eval_J_Ggt_work(casadi_int *sz_arg, casadi_int* sz_res,
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_Ggt_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_Ggt_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 2*sizeof(const casadi_real*);
   if (sz_res) *sz_res = 1*sizeof(casadi_real*);
   if (sz_iw) *sz_iw = 0*sizeof(casadi_int);
@@ -1127,7 +1127,7 @@ CASADI_SYMBOL_EXPORT int eval_J_Ggt_work_bytes(casadi_int *sz_arg, casadi_int* s
   return 0;
 }
 
-/* eval_J_Ggt_ineq:(i0[4],i1[15])->(o0[19x19]) */
+/* brach_eval_J_Ggt_ineq:(i0[4],i1[15])->(o0[19x19]) */
 static int casadi_f5(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem) {
   casadi_real a0, a1;
   a0=0.;
@@ -1496,45 +1496,45 @@ static int casadi_f5(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_Ggt_ineq(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
+CASADI_SYMBOL_EXPORT int brach_eval_J_Ggt_ineq(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
   return casadi_f5(arg, res, iw, w, mem);
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_Ggt_ineq_alloc_mem(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_Ggt_ineq_alloc_mem(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_Ggt_ineq_init_mem(int mem) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_Ggt_ineq_init_mem(int mem) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_J_Ggt_ineq_free_mem(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_J_Ggt_ineq_free_mem(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_Ggt_ineq_checkout(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_Ggt_ineq_checkout(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_J_Ggt_ineq_release(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_J_Ggt_ineq_release(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_J_Ggt_ineq_incref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_J_Ggt_ineq_incref(void) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_J_Ggt_ineq_decref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_J_Ggt_ineq_decref(void) {
 }
 
-CASADI_SYMBOL_EXPORT casadi_int eval_J_Ggt_ineq_n_in(void) { return 2;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_J_Ggt_ineq_n_in(void) { return 2;}
 
-CASADI_SYMBOL_EXPORT casadi_int eval_J_Ggt_ineq_n_out(void) { return 1;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_J_Ggt_ineq_n_out(void) { return 1;}
 
-CASADI_SYMBOL_EXPORT casadi_real eval_J_Ggt_ineq_default_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT casadi_real brach_eval_J_Ggt_ineq_default_in(casadi_int i) {
   switch (i) {
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_J_Ggt_ineq_name_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_J_Ggt_ineq_name_in(casadi_int i) {
   switch (i) {
     case 0: return "i0";
     case 1: return "i1";
@@ -1542,14 +1542,14 @@ CASADI_SYMBOL_EXPORT const char* eval_J_Ggt_ineq_name_in(casadi_int i) {
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_J_Ggt_ineq_name_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_J_Ggt_ineq_name_out(casadi_int i) {
   switch (i) {
     case 0: return "o0";
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_J_Ggt_ineq_sparsity_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_J_Ggt_ineq_sparsity_in(casadi_int i) {
   switch (i) {
     case 0: return casadi_s0;
     case 1: return casadi_s1;
@@ -1557,14 +1557,14 @@ CASADI_SYMBOL_EXPORT const casadi_int* eval_J_Ggt_ineq_sparsity_in(casadi_int i)
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_J_Ggt_ineq_sparsity_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_J_Ggt_ineq_sparsity_out(casadi_int i) {
   switch (i) {
     case 0: return casadi_s6;
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_Ggt_ineq_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_Ggt_ineq_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 2;
   if (sz_res) *sz_res = 1;
   if (sz_iw) *sz_iw = 0;
@@ -1572,7 +1572,7 @@ CASADI_SYMBOL_EXPORT int eval_J_Ggt_ineq_work(casadi_int *sz_arg, casadi_int* sz
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_J_Ggt_ineq_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_J_Ggt_ineq_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 2*sizeof(const casadi_real*);
   if (sz_res) *sz_res = 1*sizeof(casadi_real*);
   if (sz_iw) *sz_iw = 0*sizeof(casadi_int);
@@ -1580,7 +1580,7 @@ CASADI_SYMBOL_EXPORT int eval_J_Ggt_ineq_work_bytes(casadi_int *sz_arg, casadi_i
   return 0;
 }
 
-/* eval_H_RSQrqt:(i0[4],i1[15],i2[4],i3[12],i4[19])->(o0[19x19]) */
+/* brach_eval_H_RSQrqt:(i0[4],i1[15],i2[4],i3[12],i4[19])->(o0[19x19]) */
 static int casadi_f6(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem) {
   casadi_real a00, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10, a11;
   casadi_real a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23;
@@ -1639,7 +1639,7 @@ static int casadi_f6(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   a01=arg[1]? arg[1][12] : 0;
   a02=cos(a01);
   a03=arg[0]? arg[0][3] : 0;
-  a04=50.;
+  a04=20.;
   a03=(a03/a04);
   a04=arg[3]? arg[3][1] : 0;
   a05=(a03*a04);
@@ -1656,7 +1656,7 @@ static int casadi_f6(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   if (res[0]!=0) res[0][54]=a00;
   if (res[0]!=0) res[0][55]=a00;
   a10=sin(a01);
-  a11=2.0000000000000000e-02;
+  a11=5.0000000000000003e-02;
   a04=(a11*a04);
   a10=(a10*a04);
   a12=cos(a01);
@@ -2081,45 +2081,45 @@ static int casadi_f6(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_H_RSQrqt(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
+CASADI_SYMBOL_EXPORT int brach_eval_H_RSQrqt(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem){
   return casadi_f6(arg, res, iw, w, mem);
 }
 
-CASADI_SYMBOL_EXPORT int eval_H_RSQrqt_alloc_mem(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_H_RSQrqt_alloc_mem(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_H_RSQrqt_init_mem(int mem) {
+CASADI_SYMBOL_EXPORT int brach_eval_H_RSQrqt_init_mem(int mem) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_H_RSQrqt_free_mem(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_H_RSQrqt_free_mem(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT int eval_H_RSQrqt_checkout(void) {
+CASADI_SYMBOL_EXPORT int brach_eval_H_RSQrqt_checkout(void) {
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT void eval_H_RSQrqt_release(int mem) {
+CASADI_SYMBOL_EXPORT void brach_eval_H_RSQrqt_release(int mem) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_H_RSQrqt_incref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_H_RSQrqt_incref(void) {
 }
 
-CASADI_SYMBOL_EXPORT void eval_H_RSQrqt_decref(void) {
+CASADI_SYMBOL_EXPORT void brach_eval_H_RSQrqt_decref(void) {
 }
 
-CASADI_SYMBOL_EXPORT casadi_int eval_H_RSQrqt_n_in(void) { return 5;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_H_RSQrqt_n_in(void) { return 5;}
 
-CASADI_SYMBOL_EXPORT casadi_int eval_H_RSQrqt_n_out(void) { return 1;}
+CASADI_SYMBOL_EXPORT casadi_int brach_eval_H_RSQrqt_n_out(void) { return 1;}
 
-CASADI_SYMBOL_EXPORT casadi_real eval_H_RSQrqt_default_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT casadi_real brach_eval_H_RSQrqt_default_in(casadi_int i) {
   switch (i) {
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_H_RSQrqt_name_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_H_RSQrqt_name_in(casadi_int i) {
   switch (i) {
     case 0: return "i0";
     case 1: return "i1";
@@ -2130,14 +2130,14 @@ CASADI_SYMBOL_EXPORT const char* eval_H_RSQrqt_name_in(casadi_int i) {
   }
 }
 
-CASADI_SYMBOL_EXPORT const char* eval_H_RSQrqt_name_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const char* brach_eval_H_RSQrqt_name_out(casadi_int i) {
   switch (i) {
     case 0: return "o0";
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_H_RSQrqt_sparsity_in(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_H_RSQrqt_sparsity_in(casadi_int i) {
   switch (i) {
     case 0: return casadi_s0;
     case 1: return casadi_s1;
@@ -2148,14 +2148,14 @@ CASADI_SYMBOL_EXPORT const casadi_int* eval_H_RSQrqt_sparsity_in(casadi_int i) {
   }
 }
 
-CASADI_SYMBOL_EXPORT const casadi_int* eval_H_RSQrqt_sparsity_out(casadi_int i) {
+CASADI_SYMBOL_EXPORT const casadi_int* brach_eval_H_RSQrqt_sparsity_out(casadi_int i) {
   switch (i) {
     case 0: return casadi_s6;
     default: return 0;
   }
 }
 
-CASADI_SYMBOL_EXPORT int eval_H_RSQrqt_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_H_RSQrqt_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 5;
   if (sz_res) *sz_res = 1;
   if (sz_iw) *sz_iw = 0;
@@ -2163,7 +2163,7 @@ CASADI_SYMBOL_EXPORT int eval_H_RSQrqt_work(casadi_int *sz_arg, casadi_int* sz_r
   return 0;
 }
 
-CASADI_SYMBOL_EXPORT int eval_H_RSQrqt_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
+CASADI_SYMBOL_EXPORT int brach_eval_H_RSQrqt_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
   if (sz_arg) *sz_arg = 5*sizeof(const casadi_real*);
   if (sz_res) *sz_res = 1*sizeof(casadi_real*);
   if (sz_iw) *sz_iw = 0*sizeof(casadi_int);

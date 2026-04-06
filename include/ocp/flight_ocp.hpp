@@ -1,15 +1,15 @@
 #pragma once
 #include <fatrop/fatrop.hpp>
 #include <vector>
+#include <string>
 
 namespace aeroplan {
 
+// 纯数据结构，所有数据将从 JSON 反序列化得来
 struct OCPConfig {
-    fatrop::Index K_intervals = 100;
-    fatrop::Index nx = 5;
-    fatrop::Index nu = 21;
-    fatrop::Index ng_defects = 15;
-    fatrop::Index ng_ineq = 6;
+    std::string problem_name;
+    fatrop::Index K_intervals;
+    fatrop::Index nx, nu, ng_defects, ng_ineq;
 
     std::vector<int> init_idx;
     std::vector<double> init_val;
@@ -20,8 +20,8 @@ struct OCPConfig {
     std::vector<double> ineq_lower;
     std::vector<double> ineq_upper;
 
-    int obj_state_idx = 4;
-    double obj_weight = 1.0;
+    int obj_state_idx;
+    double obj_weight;
 
     std::vector<double> guess_xk;
     std::vector<double> guess_uk;
@@ -37,7 +37,7 @@ private:
     std::vector<double> work_J_Ggt_;
     std::vector<double> work_f_dyn_;
     std::vector<double> work_g_eq_;
-    std::vector<double> work_J_Ggt_ineq_; 
+    std::vector<double> work_J_Ggt_ineq_;
 
 public:
     explicit FlightOCP(const OCPConfig& config);

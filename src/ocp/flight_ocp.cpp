@@ -135,13 +135,13 @@ Index FlightOCP::get_bounds(Scalar *lower, Scalar *upper, const Index k) const {
 }
 
 Index FlightOCP::get_initial_xk(Scalar *xk, const Index k) const {
-    for(int i=0; i<cfg_.nx; i++) xk[i] = cfg_.guess_xk[i];
+    for(int i=0; i<cfg_.nx; i++) xk[i] = cfg_.guess_xk.empty() ? 0.0 : cfg_.guess_xk[i];
     return 0;
 }
 
 Index FlightOCP::get_initial_uk(Scalar *uk, const Index k) const {
     if (k < K_total_ - 1) {
-        for(int i=0; i<cfg_.nu; i++) uk[i] = cfg_.guess_uk[i];
+        for(int i=0; i<cfg_.nu; i++) uk[i] = cfg_.guess_uk.empty() ? 0.0 : cfg_.guess_uk[i];
     }
     return 0;
 }

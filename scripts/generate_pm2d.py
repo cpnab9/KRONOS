@@ -1,19 +1,15 @@
 import casadi as ca
 import numpy as np
 import os
-import shutil  
+import shutil
+import json  # 【新增】引入 json 库
 
-def generate_casadi_c_code():
-    # 算例物理量映射
-    nx = 5          # 状态: [x, y, vx, vy, cost] 
-    nu_real = 2     # 控制: [fx, fy]
-    d = 3           # 3阶 Radau
-    K_intervals = 100
-    tf = 5.0        # 原算例 K=100, dt=0.05, 故总时间 tf=5.0 固定
-    
-    nu = d * nx + d * nu_real  # 3*5 + 3*2 = 21
+def generate_point_mass_2d():
+    # ... (前面的物理建模和求导逻辑保持完全不变) ...
+    nx, nu_real, d, K_intervals, tf = 5, 2, 3, 100, 5.0
+    nu = d * nx + d * nu_real  # 21
     ng = d * nx                # 15
-    ng_ineq = d * nu_real      # 6 (三个配点上的控制边界)
+    ng_ineq = d * nu_real      # 6
 
     sym_x = ca.SX.sym('x', nx)
     sym_u = ca.SX.sym('u', nu)
@@ -24,18 +20,11 @@ def generate_casadi_c_code():
     X_inner = [sym_u[i*nx : (i+1)*nx] for i in range(d)]
     U_inner = [sym_u[d*nx + i*nu_real : d*nx + (i+1)*nu_real] for i in range(d)]
 
-    # 复现原算例的连续动力学
     def f_cont(x, u):
         vx, vy = x[2], x[3]
         fx, fy = u[0], u[1]
         m = 1.0
-        
-        dx = vx
-        dy = vy
-        dvx = fx / m + 0.5 * fy**2 / m  # 对应算例中的非线性项
-        dvy = fy / m
-        dcost = fx**2 + fy**2           # 积分代价
-        return ca.vertcat(dx, dy, dvx, dvy, dcost)
+        return ca.vertcat(vx, vy, fx/m + 0.5*fy**2/m, fy/m, fx**2 + fy**2)
 
     tau = ca.collocation_points(d, 'radau')
     tau_root = np.append(0, tau)            
@@ -57,22 +46,18 @@ def generate_casadi_c_code():
         
     g_eq = ca.vertcat(*g_eq_list)
     f_dyn = X_inner[-1] 
-
-    # 将 3 个内部配点的 [fx, fy] 全部提取出来施加约束边界
-    g_ineq_list = []
-    for i in range(d):
-        g_ineq_list.append(U_inner[i])
+    
+    g_ineq_list = [U_inner[i] for i in range(d)]
     g_ineq = ca.vertcat(*g_ineq_list)
 
     ux = ca.vertcat(sym_u, sym_x)
     J_BAbt = ca.densify(ca.jacobian(f_dyn, ux).T)
     J_Ggt  = ca.densify(ca.jacobian(g_eq, ux).T)
     J_Ggt_ineq = ca.densify(ca.jacobian(g_ineq, ux).T) 
-
-    # 海森矩阵包含不等式乘子项
     lagrangian = ca.dot(sym_lam_dyn, f_dyn) + ca.dot(sym_lam_eq, g_eq) + ca.dot(sym_lam_ineq, g_ineq)
     H_RSQrqt = ca.densify(ca.hessian(lagrangian, ux)[0])
 
+    # 1. 导出统一的 C 代码 (不需要任何前缀)
     filename = 'casadi_codegen.c'
     cgen = ca.CodeGenerator(filename)
     cgen.add(ca.Function('eval_f_dyn',[sym_x, sym_u],[f_dyn]))
@@ -82,14 +67,38 @@ def generate_casadi_c_code():
     cgen.add(ca.Function('eval_J_Ggt',[sym_x, sym_u],[J_Ggt]))
     cgen.add(ca.Function('eval_J_Ggt_ineq',[sym_x, sym_u],[J_Ggt_ineq]))
     cgen.add(ca.Function('eval_H_RSQrqt',[sym_x, sym_u, sym_lam_dyn, sym_lam_eq, sym_lam_ineq],[H_RSQrqt]))
-    
     cgen.generate() 
 
     out_dir = '../src/codegen'
     os.makedirs(out_dir, exist_ok=True)
-    out_file = os.path.join(out_dir, filename)
-    shutil.move(filename, out_file)
-    print(f"成功生成代码: {out_file}")
+    shutil.move(filename, os.path.join(out_dir, filename))
+
+    # 2. 【核心新增】将所有的环境参数打包为 JSON 导出
+    # 2. 【核心新增】将所有的环境参数打包为 JSON 导出
+    fatrop_inf = 1e20
+    config_dict = {
+        "problem_name": "PointMass2D",
+        "K_intervals": K_intervals,
+        "nx": nx, "nu": nu, "ng_defects": ng, "ng_ineq": ng_ineq, # <--- 这里把 ng_defects 改成了 ng
+        "init_idx": [0, 1, 2, 3, 4],
+        "init_val": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "term_idx": [0, 1, 2, 3],
+        "term_val": [1.0, 2.0, 3.0, 4.0],
+        # 将配置写死在 Python 脚本中，C++ 端只负责执行
+        "ineq_lower": [-50.0, -100.0, -50.0, -100.0, -50.0, -100.0],
+        "ineq_upper": [ 50.0,  100.0,  50.0,  100.0,  50.0,  100.0],
+        "obj_state_idx": 4,
+        "obj_weight": 20.0, # 1/dt
+        "guess_xk": [0.0] * nx,
+        "guess_uk": [0.0] * nu
+    }
+
+    config_dir = '../config'
+    os.makedirs(config_dir, exist_ok=True)
+    with open(os.path.join(config_dir, 'ocp_config.json'), 'w') as f:
+        json.dump(config_dict, f, indent=4)
+        
+    print(f"成功生成 C 代码和 ocp_config.json 配置文件！")
 
 if __name__ == "__main__":
-    generate_casadi_c_code()
+    generate_point_mass_2d()

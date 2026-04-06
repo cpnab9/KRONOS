@@ -1,14 +1,8 @@
 #include "planner/trajectory_planner.hpp"
-#include <iostream>
 
 int main() {
-    std::cout << "启动飞行器伪谱法轨迹规划器 (V1.0)..." << std::endl;
-    
-    // 初始化规划器 (内部完成问题内存的预分配和初始化)
-    aeroplan::TrajectoryPlanner planner;
-    
-    // 执行一次在线规划
+    // 读取 Python 自动生成的配置文件
+    aeroplan::TrajectoryPlanner planner("../config/ocp_config.json");
     planner.plan();
-    
     return 0;
 }
