@@ -5,7 +5,6 @@
 
 namespace aeroplan {
 
-// 纯数据结构，所有数据将从 JSON 反序列化得来
 struct OCPConfig {
     std::string problem_name;
     fatrop::Index K_intervals;
@@ -23,8 +22,18 @@ struct OCPConfig {
     int obj_state_idx;
     double obj_weight;
 
-    std::vector<double> guess_xk;
-    std::vector<double> guess_uk;
+    // === 初始猜想配置 (修改为两端点以支持线性插值) ===
+    std::vector<double> guess_x0;
+    std::vector<double> guess_xf;
+    std::vector<double> guess_u0;
+    std::vector<double> guess_uf;
+
+    // === 松弛变量 (Slack Variables) 配置 ===
+    fatrop::Index ns = 0;                 
+    std::vector<int> idx_s;               
+    std::vector<double> guess_sk;         
+    std::vector<double> Zl;               
+    std::vector<double> zl;               
 };
 
 class FlightOCP : public fatrop::OcpAbstract {
