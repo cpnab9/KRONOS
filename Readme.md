@@ -1,83 +1,41 @@
-# KRONOS: High-Performance Trajectory Optimizer
-
-**KRONOS** is a trajectory optimization framework designed for high-performance motion planning and guidance. It leverages **Pseudospectral Collocation** methods and the **fatrop** solver to provide fast, numerically stable solutions for complex Optimal Control Problems (OCP).
-
-## 🚀 Key Features
-
-* **Pseudospectral Collocation**: Utilizes Radau points for high-accuracy discretization of continuous dynamics.
-* **Offline Code Generation**: Uses CasADi in Python to pre-calculate Jacobians and Hessians, generating optimized C code for real-time execution.
-* **Fast Solver Integration**: Built around the `fatrop` (Fast Trajectory Optimization) solver for high-speed convergence.
-* **Modular C++ Architecture**: Provides a clean wrapper (`FatropWrapper`) to bridge generated NLP functions with the C++ runtime.
-
-## 🗺️ Roadmap
-
-### Advanced Algorithmic Capabilities
-- [ ] **Multi-Phase Pseudospectral Method with Variable Intervals:** Employs a fixed-dimension varying-mesh approach to guarantee high precision and a stable numerical structure.
-- [ ] **Primal-Dual Mesh Mapping Warm Start:** Ensures ultra-fast convergence across different phases and mesh refinements.
-- [ ] **Soft Constraint Relaxation:** Guarantees absolute solvability and feasibility for practical engineering applications.
-
-### Performance Maximization
-- [ ] **Parallelized Zero-Allocation Architecture:** Designed to extract maximum computational performance from the underlying hardware.
-
-## 📂 Project Structure
-
 ```text
-KRONOS/
-├── offline_codegen/       # Python scripts for NLP definition and C-code generation
-├── generated/             # Auto-generated C code (Target/Constraints/Jacobians)
-├── include/               # C++ Headers (Solver wrappers, types, utilities)
-├── src/                   # C++ Implementation (Fatrop integration, entry points)
-├── config/                # Physical parameters and solver settings
-└── third_party/           # External dependencies (fatrop)
+AeroPseudospectral-Planner/
+├── CMakeLists.txt                  # 顶层 CMake 构建脚本
+├── README.md                       # 工程说明文档
+├── config/                         # 配置文件目录
+│   └── planner_config.yaml         # 飞行器参数、最大网格数、约束边界等配置
+├── scripts/                        # 离线模块：Python / CasADi 推导与代码生成
+│   ├── models/                     # 飞行器动力学模型库 (如 固定翼、旋翼、火箭等)
+│   ├── generator/                  # 伪谱法配置与矩阵生成核心逻辑
+│   ├── generate_ocp.py             # 离线代码生成入口脚本
+│   └── requirements.txt            # Python 依赖
+├── include/                        # 在线模块：C++ 头文件 (接口与声明)
+│   ├── memory/                     # 内存管理模块 (核心！实现零动态内存)
+│   │   ├── static_pool.hpp         # 静态内存池定义
+│   │   └── fixed_size_types.hpp    # 预定义的静态大小数组/结构体 (std::array)
+│   ├── core/                       # 核心数据结构与枚举
+│   │   └── trajectory_types.hpp    # 飞行器状态、控制指令的结构体定义
+│   ├── ocp/                        # OCP (最优控制问题) 组装模块
+│   │   ├── casadi_wrapper.hpp      # 包装 CasADi 生成的 C 纯函数接口
+│   │   └── flight_ocp.hpp          # 继承 OcpAbstract，组装 Fatrop 问题
+│   ├── planner/                    # 规划器顶层逻辑模块
+│   │   ├── mesh_adapter.hpp        # 网格自适应逻辑 (计算需要的网格分布)
+│   │   ├── warm_starter.hpp        # 热启动与轨迹移位预测逻辑
+│   │   └── trajectory_planner.hpp  # 规划器主干，调度 OCP 和 Solver
+│   └── utils/                      # 工具模块
+│       └── timer.hpp               # 高精度耗时统计
+├── src/                            # 在线模块：C++ 源文件 (实现)
+│   ├── codegen/                    # 【自动生成目录】存放 CasADi 生成的 .c / .h 文件
+│   │   └── casadi_codegen.c        # (由 scripts 生成，不提交到 git)
+│   ├── ocp/
+│   │   └── flight_ocp.cpp
+│   ├── planner/
+│   │   ├── mesh_adapter.cpp
+│   │   ├── warm_starter.cpp
+│   │   └── trajectory_planner.cpp
+│   └── main.cpp                    # 独立的测试/运行入口
+└── tests/                          # 单元测试 (Google Test)
+    ├── test_memory_pool.cpp        # 内存泄露与静态分配测试
+    ├── test_warm_start.cpp         # 验证移位热启动是否正确
+    └── test_fatrop_solver.cpp      # 验证单次求解的正确性
 ```
-
-## 🛠 Prerequisites
-
--   **Python 3.x** with `casadi` and `numpy`.
--   **C++ Compiler** (supporting C++17).
--   **CMake** (version 3.10 or higher).
--   **fatrop**: Must be installed or accessible via `CMAKE_PREFIX_PATH`.
-
-## 🔄 Workflow
-
-The KRONOS pipeline consists of two main stages:
-
-### 1. Offline Phase (Code Generation)
-Define your dynamics and constraints in Python. The script generates a pure C file containing the NLP functions required by the solver.
-
-```bash
-python3 offline_codegen/generate_brachistochrone.py
-```
-This produces `kronos_nlp_functions.c` and `.h` in the `generated/` directory.
-
-### 2. Online Phase (Compilation & Execution)
-CMake detects the generated code, compiles it into a shared library, and links it to the C++ runner.
-
-```bash
-mkdir build && cd build
-cmake ..
-make
-```
-
-## 🏃 Running Examples
-
-### Brachistochrone Problem
-A classic problem to find the path between two points that is covered by a point mass in the least time under constant gravity.
-
-```bash
-./run_brachistochrone
-```
-The program will output the optimal descent time (tf) and the terminal state reached.
-
-## ⚙️ Configuration
-
-* **Solver Settings**: Modify `fatrop` tolerances and iterations in `offline_codegen/` scripts.
-* **Hardware Deployment**: The generated C code is self-contained (Zero-allocation mode), making it suitable for embedded flight computers.
-
---- 
-
-### 💡 Note on Custom Problems
-To implement a new trajectory optimization problem:
-1. Create a Python script in `offline_codegen/` based on `generate_brachistochrone.py`.
-2. Update the `CMakeLists.txt` to include the new target.
-3. Implement a C++ runner in `src/` to call the `FatropWrapper`.
