@@ -3,8 +3,10 @@
 extern "C" {
     int eval_f_dyn(const double** arg, double** res, int* iw, double* w, int mem);
     int eval_g_eq(const double** arg, double** res, int* iw, double* w, int mem);
+    int eval_g_ineq(const double** arg, double** res, int* iw, double* w, int mem);
     int eval_J_BAbt(const double** arg, double** res, int* iw, double* w, int mem);
     int eval_J_Ggt(const double** arg, double** res, int* iw, double* w, int mem);
+    int eval_J_Ggt_ineq(const double** arg, double** res, int* iw, double* w, int mem);
     int eval_H_RSQrqt(const double** arg, double** res, int* iw, double* w, int mem);
 }
 
@@ -16,8 +18,8 @@ inline void call_casadi(int (*f)(const double**, double**, int*, double*, int),
 }
 
 inline void call_casadi_hess(int (*f)(const double**, double**, int*, double*, int), 
-                             const double* a1, const double* a2, const double* a3, const double* a4, double* r1) {
-    const double* args[4] = {a1, a2, a3, a4};
+                             const double* a1, const double* a2, const double* a3, const double* a4, const double* a5, double* r1) {
+    const double* args[5] = {a1, a2, a3, a4, a5};
     double* res[1] = {r1};
     f(args, res, nullptr, nullptr, 0);
 }

@@ -4,38 +4,26 @@ import os
 import shutil  
 
 def generate_casadi_c_code():
-    # 算例物理量映射
-    nx = 5          # 状态: [x, y, vx, vy, cost] 
-    nu_real = 2     # 控制: [fx, fy]
+    nx = 4          # 状态: [x, y, v, tf]
+    nu_real = 1     # 控制: [theta]
     d = 3           # 3阶 Radau
-    K_intervals = 100
-    tf = 5.0        # 原算例 K=100, dt=0.05, 故总时间 tf=5.0 固定
+    K_intervals = 20
     
-    nu = d * nx + d * nu_real  # 3*5 + 3*2 = 21
-    ng = d * nx                # 15
-    ng_ineq = d * nu_real      # 6 (三个配点上的控制边界)
+    nu = d * nx + d * nu_real  # 15
+    ng = d * nx                # 12
 
     sym_x = ca.SX.sym('x', nx)
     sym_u = ca.SX.sym('u', nu)
     sym_lam_dyn = ca.SX.sym('lam_dyn', nx)
     sym_lam_eq = ca.SX.sym('lam_eq', ng)
-    sym_lam_ineq = ca.SX.sym('lam_ineq', ng_ineq) 
 
-    X_inner = [sym_u[i*nx : (i+1)*nx] for i in range(d)]
+    X_inner =[sym_u[i*nx : (i+1)*nx] for i in range(d)]
     U_inner = [sym_u[d*nx + i*nu_real : d*nx + (i+1)*nu_real] for i in range(d)]
 
-    # 复现原算例的连续动力学
     def f_cont(x, u):
-        vx, vy = x[2], x[3]
-        fx, fy = u[0], u[1]
-        m = 1.0
-        
-        dx = vx
-        dy = vy
-        dvx = fx / m + 0.5 * fy**2 / m  # 对应算例中的非线性项
-        dvy = fy / m
-        dcost = fx**2 + fy**2           # 积分代价
-        return ca.vertcat(dx, dy, dvx, dvy, dcost)
+        v, tf, theta = x[2], x[3], u[0]
+        g = 9.81
+        return ca.vertcat(v * ca.cos(theta), v * ca.sin(theta), g * ca.sin(theta), 0.0)
 
     tau = ca.collocation_points(d, 'radau')
     tau_root = np.append(0, tau)            
@@ -48,8 +36,8 @@ def generate_casadi_c_code():
         dp = np.polyder(p)
         for i in range(d+1): C[j, i] = dp(tau_root[i])
 
-    h = tf / K_intervals
-    g_eq_list = []
+    h = sym_x[3] / K_intervals
+    g_eq_list =[]
     for i in range(1, d+1):
         x_dot_i = C[0, i] * sym_x
         for j in range(1, d+1): x_dot_i += C[j, i] * X_inner[j-1]
@@ -58,38 +46,32 @@ def generate_casadi_c_code():
     g_eq = ca.vertcat(*g_eq_list)
     f_dyn = X_inner[-1] 
 
-    # 将 3 个内部配点的 [fx, fy] 全部提取出来施加约束边界
-    g_ineq_list = []
-    for i in range(d):
-        g_ineq_list.append(U_inner[i])
-    g_ineq = ca.vertcat(*g_ineq_list)
-
     ux = ca.vertcat(sym_u, sym_x)
     J_BAbt = ca.densify(ca.jacobian(f_dyn, ux).T)
     J_Ggt  = ca.densify(ca.jacobian(g_eq, ux).T)
-    J_Ggt_ineq = ca.densify(ca.jacobian(g_ineq, ux).T) 
-
-    # 海森矩阵包含不等式乘子项
-    lagrangian = ca.dot(sym_lam_dyn, f_dyn) + ca.dot(sym_lam_eq, g_eq) + ca.dot(sym_lam_ineq, g_ineq)
+    lagrangian = ca.dot(sym_lam_dyn, f_dyn) + ca.dot(sym_lam_eq, g_eq)
     H_RSQrqt = ca.densify(ca.hessian(lagrangian, ux)[0])
 
+    # ---- 6. 导出 C 代码 ----
     filename = 'casadi_codegen.c'
-    cgen = ca.CodeGenerator(filename)
+    cgen = ca.CodeGenerator(filename) # 只传纯文件名，不带路径
     cgen.add(ca.Function('eval_f_dyn',[sym_x, sym_u],[f_dyn]))
     cgen.add(ca.Function('eval_g_eq',[sym_x, sym_u], [g_eq]))
-    cgen.add(ca.Function('eval_g_ineq',[sym_x, sym_u], [g_ineq]))
     cgen.add(ca.Function('eval_J_BAbt', [sym_x, sym_u],[J_BAbt]))
     cgen.add(ca.Function('eval_J_Ggt',[sym_x, sym_u],[J_Ggt]))
-    cgen.add(ca.Function('eval_J_Ggt_ineq',[sym_x, sym_u],[J_Ggt_ineq]))
-    cgen.add(ca.Function('eval_H_RSQrqt',[sym_x, sym_u, sym_lam_dyn, sym_lam_eq, sym_lam_ineq],[H_RSQrqt]))
+    cgen.add(ca.Function('eval_H_RSQrqt',[sym_x, sym_u, sym_lam_dyn, sym_lam_eq],[H_RSQrqt]))
     
+    # 这会在当前运行 python 的目录下生成 casadi_codegen.c
     cgen.generate() 
 
+    # ---- 7. 移动文件到 C++ 源码目录 ----
     out_dir = '../src/codegen'
     os.makedirs(out_dir, exist_ok=True)
     out_file = os.path.join(out_dir, filename)
+    
+    # 移动并覆盖已有文件
     shutil.move(filename, out_file)
-    print(f"成功生成代码: {out_file}")
+    print(f"成功生成并移动代码至: {out_file}")
 
 if __name__ == "__main__":
     generate_casadi_c_code()
