@@ -5,7 +5,7 @@ import shutil
 import json
 
 def generate_flight_ocp():
-    print(">>> 开始生成高超声速飞行器轨迹优化算例 (KRONOS 原生松弛 + 线性插值版本)...")
+    print(">>> 开始生成高超声速飞行器轨迹优化算例 (支持网格自适应与动态障碍物)...")
     
     # ==========================================
     # 1. 物理常数与飞行器参数
@@ -29,19 +29,21 @@ def generate_flight_ocp():
     # ==========================================
     # 2. 维度定义 (纯物理)
     # ==========================================
-    nx = 9          # 状态量: [r, theta, phi, V, gamma, psi, sigma, alpha, tf]
-    nu_real = 2     # 控制量: [sigma_rate, alpha_rate]
-    d = 5           # 5阶 Radau 伪谱法配点
-    K_intervals = 75 
+    nx = 9          
+    nu_real = 2     
+    d = 5           
+    K_intervals = 50 
     
-    nu = d * nx + d * nu_real  # 55
-    ng = d * nx                # 45
+    nu = d * nx + d * nu_real  
+    ng = d * nx                
     
     # ==========================================
-    # 3. 符号变量与动力学函数
+    # 3. 符号变量与动力学函数 (【新增】：引入运行时参数 sym_p)
     # ==========================================
     sym_x = ca.SX.sym('x', nx)
     sym_u = ca.SX.sym('u', nu)
+    sym_p = ca.SX.sym('p', 2) # p[0] = mesh_fraction, p[1] = nfz2_flag
+    
     X_inner = [sym_u[i*nx : (i+1)*nx] for i in range(d)]
     U_inner = [sym_u[d*nx + i*nu_real : d*nx + (i+1)*nu_real] for i in range(d)]
 
@@ -89,21 +91,22 @@ def generate_flight_ocp():
         dp = np.polyder(p)
         for i in range(d+1): C[j, i] = dp(tau_root[i])
 
-    h = sym_x[8] / K_intervals  # 当前时间段步长(基于自由时间 tf)
+    # 【核心修改】：步长不再除以固定的 K_intervals，而是乘以动态网格比例 sym_p[0]
+    h = sym_x[8] * sym_p[0] 
     
     g_eq_list, g_ineq_list = [], []
     ineq_lower, ineq_upper = [], []
-    idx_s = []  # 记录需要软化的约束索引
+    idx_s = []  
+    fatrop_inf = 1e20 
     
-    fatrop_inf = 1e20 # 用于替代 ca.inf 避免 C++ JSON 解析错误
-    
-    # -- 4.1 提取状态边界进入不等式约束 --
+    # 状态边界
     g_ineq_list.extend([sym_x[0], sym_x[3], sym_x[4], sym_x[6], sym_x[7], sym_x[8]])
     ineq_lower.extend([1.0, 100.0/V_ref, -25.0*np.pi/180.0, -85.0*np.pi/180.0, alpha_min, 100.0/t_ref])
     ineq_upper.extend([1.0 + 120000.0/R0, 8000.0/V_ref, 15.0*np.pi/180.0, 85.0*np.pi/180.0, alpha_max, 3000.0/t_ref])
     current_ineq_idx = 6 
 
-    # -- 4.2 提取每个配点上的动力学和路径约束 --
+    nfz2_flag = sym_p[1] # 提取环境标志
+
     for i in range(1, d+1):
         x_dot_i = C[0, i] * sym_x
         for j in range(1, d+1): x_dot_i += C[j, i] * X_inner[j-1]
@@ -115,15 +118,14 @@ def generate_flight_ocp():
         dist1_sq = (theta_cj - theta_NFZ1)**2 + (phi_cj - phi_NFZ1)**2
         dist2_sq = (theta_cj - theta_NFZ2)**2 + (phi_cj - phi_NFZ2)**2
         
-        # 将所有限制放入不等式约束中
-        g_ineq_list.extend([sigma_rate, alpha_rate, Q_dot/Q_dot_max, q_dyn/q_max, n_load/n_max, R_NFZ1**2 - dist1_sq, R_NFZ2**2 - dist2_sq])
+        # 【核心修改】：利用 nfz2_flag 实现动态开启禁飞区2的 Big-M 约束
+        g_ineq_list.extend([sigma_rate, alpha_rate, Q_dot/Q_dot_max, q_dyn/q_max, n_load/n_max, 
+                            R_NFZ1**2 - dist1_sq, 
+                            R_NFZ2**2 - dist2_sq - (1.0 - nfz2_flag)*100.0]) 
         
-        # ⚠️ 这里使用 -fatrop_inf 代替 -ca.inf
         ineq_lower.extend([-sigma_rate_max, -alpha_rate_max, -fatrop_inf, -fatrop_inf, -fatrop_inf, -fatrop_inf, -fatrop_inf])
-        # 路径约束上界为 1.0, 禁飞区上界为 0.0
         ineq_upper.extend([sigma_rate_max, alpha_rate_max, 1.0, 1.0, 1.0, 0.0, 0.0])
         
-        # 记录软约束的索引 (Q_dot, q_dyn, n_load)
         idx_s.extend([current_ineq_idx + 2, current_ineq_idx + 3, current_ineq_idx + 4])
         current_ineq_idx += 7
         
@@ -131,7 +133,7 @@ def generate_flight_ocp():
     ng_ineq = current_ineq_idx
 
     # ==========================================
-    # 5. 代码生成
+    # 5. 代码生成 (保持与原版高度一致的命名)
     # ==========================================
     sym_lam_dyn, sym_lam_eq, sym_lam_ineq = ca.SX.sym('ld', nx), ca.SX.sym('le', ng), ca.SX.sym('li', ng_ineq)
     ux = ca.vertcat(sym_u, sym_x)
@@ -143,34 +145,35 @@ def generate_flight_ocp():
 
     filename = 'casadi_codegen.c'
     cgen = ca.CodeGenerator(filename)
+    
+    # 【核心修改】：所有导出的函数签名增加 sym_p 参数
     for func in [('eval_f_dyn', f_dyn), ('eval_g_eq', g_eq), ('eval_g_ineq', g_ineq), 
                  ('eval_J_BAbt', J_BAbt), ('eval_J_Ggt', J_Ggt), ('eval_J_Ggt_ineq', J_Ggt_ineq)]:
-        cgen.add(ca.Function(func[0], [sym_x, sym_u], [func[1]]))
-    cgen.add(ca.Function('eval_H_RSQrqt',[sym_x, sym_u, sym_lam_dyn, sym_lam_eq, sym_lam_ineq],[H_RSQrqt]))
+        cgen.add(ca.Function(func[0], [sym_x, sym_u, sym_p], [func[1]]))
+        
+    cgen.add(ca.Function('eval_H_RSQrqt',[sym_x, sym_u, sym_p, sym_lam_dyn, sym_lam_eq, sym_lam_ineq],[H_RSQrqt]))
     cgen.generate() 
 
+    # 保持原有的移动逻辑，精准贴合 CMake
     os.makedirs('../src/codegen', exist_ok=True)
     shutil.move(filename, os.path.join('../src/codegen', filename))
 
     # ==========================================
-    # 6. JSON 导出 (包含松弛变量配置和线性插值配置)
+    # 6. JSON 导出 (保持原版逻辑)
     # ==========================================
-    
-    # 设定两端点以供 C++ 端执行冷启动时的线性插值
     x0_guess = [1.0 + 100000.0/R0, 0.0, 0.0, 7450.0/V_ref, -0.5*np.pi/180.0, 0.0, 0.0, 40.0*np.pi/180.0, 1500.0/t_ref]
     xf_guess = [1.0 + 25000.0/R0, 12.0*np.pi/180.0, 70.0*np.pi/180.0, 2000.0/V_ref, -10.0*np.pi/180.0, 90.0*np.pi/180.0, 0.0, 15.0*np.pi/180.0, 1500.0/t_ref]
     
-    # ✅ 核心修复：正确区分配点状态 (X_inner) 和控制速率 (U_inner)
     u0_guess = []
-    for _ in range(d): u0_guess.extend(x0_guess)    # 填入配点上的起点状态
-    for _ in range(d): u0_guess.extend([0.0, 0.0])  # 填入起点控制速率
+    for _ in range(d): u0_guess.extend(x0_guess)
+    for _ in range(d): u0_guess.extend([0.0, 0.0])
     
     uf_guess = []
-    for _ in range(d): uf_guess.extend(xf_guess)    # 填入配点上的终点状态
-    for _ in range(d): uf_guess.extend([0.0, 0.0])  # 填入终点控制速率
+    for _ in range(d): uf_guess.extend(xf_guess)
+    for _ in range(d): uf_guess.extend([0.0, 0.0])
     
     config_dict = {
-        "problem_name": "HypersonicFlight_NativeSlack",
+        "problem_name": "HypersonicFlight_NativeSlack_Adaptive",
         "K_intervals": K_intervals, "nx": nx, "nu": nu, "ng_defects": ng, "ng_ineq": ng_ineq,
         "init_idx": [0, 1, 2, 3, 4, 5, 6, 7],
         "init_val": x0_guess[:8],
@@ -179,7 +182,7 @@ def generate_flight_ocp():
         "ineq_lower": ineq_lower,
         "ineq_upper": ineq_upper,
         "obj_state_idx": 3,
-        "obj_weight": -V_ref,  # 负号表示最大化终点速度
+        "obj_weight": -V_ref,
         
         "guess_x0": x0_guess, 
         "guess_xf": xf_guess,
@@ -189,7 +192,7 @@ def generate_flight_ocp():
         "ns": len(idx_s),      
         "idx_s": idx_s,
         "zl": [100000.0] * len(idx_s), 
-        "Zl": [10.0] * len(idx_s),     
+        "Zl": [0.0] * len(idx_s),     
         "guess_sk": [1e-3] * len(idx_s)
     }
 
@@ -197,7 +200,7 @@ def generate_flight_ocp():
     with open('../config/ocp_config.json', 'w') as f:
         json.dump(config_dict, f, indent=4)
         
-    print(f"✅ 成功生成飞行器轨迹优化 C 代码与 JSON (ns={len(idx_s)})！")
+    print(f"✅ 成功生成飞行器轨迹优化 C 代码 (已输出至 ../src/codegen/) 与 JSON 配置！")
 
 if __name__ == "__main__":
     generate_flight_ocp()
